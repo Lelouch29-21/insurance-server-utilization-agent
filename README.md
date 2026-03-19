@@ -25,6 +25,7 @@ This project implements the MVP described in the PRD for an agent that:
 - [`configs/example-config.grafana.json`](/Users/ameyakulkarni/Desktop/Insurance/configs/example-config.grafana.json): template for real Grafana access
 - [`configs/mock-metrics.json`](/Users/ameyakulkarni/Desktop/Insurance/configs/mock-metrics.json): demo metric series
 - [`configs/server-costs.csv`](/Users/ameyakulkarni/Desktop/Insurance/configs/server-costs.csv): demo cost catalog
+- [`configs/example-servers.xlsx`](/Users/ameyakulkarni/Desktop/Insurance/configs/example-servers.xlsx): sample Excel workbook for bulk server input
 - [`docs/index.html`](/Users/ameyakulkarni/Desktop/Insurance/docs/index.html): GitHub Pages entry point
 - [`docs/data/sample-report.json`](/Users/ameyakulkarni/Desktop/Insurance/docs/data/sample-report.json): bundled sample report for the UI
 
@@ -55,6 +56,16 @@ cd /Users/ameyakulkarni/Desktop/Insurance
 PYTHONPATH=src python3 -m server_utilization_agent.cli \
   --config configs/example-config.mock.json \
   --servers-file configs/example-servers.txt \
+  --print-report
+```
+
+Or use the sample Excel workbook for bulk input:
+
+```bash
+cd /Users/ameyakulkarni/Desktop/Insurance
+PYTHONPATH=src python3 -m server_utilization_agent.cli \
+  --config configs/example-config.mock.json \
+  --excel-file configs/example-servers.xlsx \
   --print-report
 ```
 
@@ -95,12 +106,27 @@ PYTHONPATH=src python3 -m server_utilization_agent.cli \
   --servers app-server-01 app-server-02
 ```
 
+For bulk server lists from Excel:
+
+```bash
+PYTHONPATH=src python3 -m server_utilization_agent.cli \
+  --config configs/example-config.grafana.json \
+  --excel-file /path/to/servers.xlsx \
+  --excel-sheet Servers \
+  --excel-column server_id \
+  --start-date 2026-03-01 \
+  --end-date 2026-03-10
+```
+
 ## Config notes
 
 - The Grafana connector expects each metric query to return a percentage time series.
 - The agent calculates the utilization score as `max(avg CPU %, avg Memory %)`.
 - Any server below the configured threshold is marked `Underutilized`.
 - Costs come from a CSV file with `server_id`, `monthly_cost`, and optional `currency`.
+- `--excel-file` supports `.xlsx`, `.xlsm`, and `.csv`.
+- `--excel-column` can be a header name like `server_id` or an Excel column letter like `A`.
+- If `--excel-column` is omitted, the loader auto-detects common headers such as `server_id`, `server`, `hostname`, `host`, and `instance`.
 
 ## GitHub Pages deployment
 

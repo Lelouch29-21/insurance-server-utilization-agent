@@ -7,6 +7,7 @@ from pathlib import Path
 from server_utilization_agent.agent import ServerUtilizationAgent
 from server_utilization_agent.config import load_config
 from server_utilization_agent.models import TimeRange
+from server_utilization_agent.spreadsheet import load_server_ids_from_spreadsheet
 
 
 def parse_args() -> argparse.Namespace:
@@ -27,6 +28,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--servers-file",
         help="Optional newline-delimited file of server IDs.",
+    )
+    parser.add_argument(
+        "--excel-file",
+        help="Optional Excel workbook (.xlsx/.xlsm) or CSV file containing server IDs.",
+    )
+    parser.add_argument(
+        "--excel-sheet",
+        help="Optional Excel sheet name for --excel-file. Defaults to the first sheet.",
+    )
+    parser.add_argument(
+        "--excel-column",
+        help=(
+            "Optional Excel column header or column letter for --excel-file, "
+            "for example 'server_id' or 'A'."
+        ),
     )
     parser.add_argument(
         "--output-dir",
@@ -56,6 +72,15 @@ def load_server_ids(args: argparse.Namespace) -> list[str]:
         lines = Path(args.servers_file).read_text().splitlines()
         server_ids.extend(line.strip() for line in lines if line.strip())
 
+    if args.excel_file:
+        server_ids.extend(
+            load_server_ids_from_spreadsheet(
+                spreadsheet_path=args.excel_file,
+                sheet_name=args.excel_sheet,
+                column=args.excel_column,
+            )
+        )
+
     deduplicated: list[str] = []
     seen: set[str] = set()
     for server_id in server_ids:
@@ -82,9 +107,17 @@ def load_time_range(args: argparse.Namespace) -> TimeRange | None:
 
 def main() -> int:
     args = parse_args()
-    server_ids = load_server_ids(args)
+    try:
+        server_ids = load_server_ids(args)
+    except (OSError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+
     if not server_ids:
-        print("No servers supplied. Use --servers or --servers-file.", file=sys.stderr)
+        print(
+            "No servers supplied. Use --servers, --servers-file, or --excel-file.",
+            file=sys.stderr,
+        )
         return 2
 
     try:
