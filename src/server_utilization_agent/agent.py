@@ -28,9 +28,17 @@ class ServerUtilizationAgent:
         self,
         server_ids: list[str],
         output_dir: str | Path | None = None,
+        time_range: TimeRange | None = None,
     ) -> AgentRunResult:
-        time_range = TimeRange.last_days(self.config.analysis_window_days)
-        metrics_result = self.metrics_provider.fetch_server_metrics(server_ids, time_range)
+        effective_time_range = time_range or TimeRange.last_days(
+            self.config.analysis_window_days
+        )
+        self.analyzer.analysis_window_days = effective_time_range.day_count
+        self.report_writer.analysis_window_days = effective_time_range.day_count
+        metrics_result = self.metrics_provider.fetch_server_metrics(
+            server_ids,
+            effective_time_range,
+        )
 
         cost_lookup = {
             server_id: self.cost_catalog.get_cost(server_id)
@@ -45,9 +53,10 @@ class ServerUtilizationAgent:
         )
         artifacts = self.report_writer.write(
             analyses=analyses,
+            server_metrics=metrics_result.server_metrics,
             missing_servers=metrics_result.missing_servers,
             warnings=metrics_result.warnings,
-            time_range=time_range,
+            time_range=effective_time_range,
             output_dir=report_output_dir,
         )
 

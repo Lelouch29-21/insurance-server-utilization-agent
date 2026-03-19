@@ -6,6 +6,7 @@ from pathlib import Path
 
 from server_utilization_agent.agent import ServerUtilizationAgent
 from server_utilization_agent.config import load_config
+from server_utilization_agent.models import TimeRange
 
 
 def parse_args() -> argparse.Namespace:
@@ -32,6 +33,14 @@ def parse_args() -> argparse.Namespace:
         help="Optional output directory override.",
     )
     parser.add_argument(
+        "--start-date",
+        help="Optional start date in YYYY-MM-DD format.",
+    )
+    parser.add_argument(
+        "--end-date",
+        help="Optional end date in YYYY-MM-DD format.",
+    )
+    parser.add_argument(
         "--print-report",
         action="store_true",
         help="Print the generated Markdown report to stdout.",
@@ -56,6 +65,21 @@ def load_server_ids(args: argparse.Namespace) -> list[str]:
     return deduplicated
 
 
+def load_time_range(args: argparse.Namespace) -> TimeRange | None:
+    if not args.start_date and not args.end_date:
+        return None
+
+    if not args.start_date or not args.end_date:
+        raise ValueError("Both --start-date and --end-date are required together.")
+
+    try:
+        return TimeRange.from_date_strings(args.start_date, args.end_date)
+    except ValueError as exc:
+        raise ValueError(
+            "Dates must use YYYY-MM-DD format and end-date must not be before start-date."
+        ) from exc
+
+
 def main() -> int:
     args = parse_args()
     server_ids = load_server_ids(args)
@@ -63,9 +87,19 @@ def main() -> int:
         print("No servers supplied. Use --servers or --servers-file.", file=sys.stderr)
         return 2
 
+    try:
+        time_range = load_time_range(args)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+
     config = load_config(args.config)
     agent = ServerUtilizationAgent(config)
-    result = agent.run(server_ids=server_ids, output_dir=args.output_dir)
+    result = agent.run(
+        server_ids=server_ids,
+        output_dir=args.output_dir,
+        time_range=time_range,
+    )
 
     print(f"Markdown report: {result.report_artifacts.markdown_path}")
     print(f"JSON report: {result.report_artifacts.json_path}")

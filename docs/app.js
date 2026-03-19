@@ -4,12 +4,22 @@ const state = {
   report: null,
   filter: "all",
   search: "",
+  dataSourceMessage: "",
+  supportsDateFiltering: false,
+  availableStartDate: "",
+  availableEndDate: "",
+  selectedStartDate: "",
+  selectedEndDate: "",
 };
 
 const elements = {
   loadSampleButton: document.querySelector("#load-sample-button"),
   uploadInput: document.querySelector("#report-upload"),
+  startDateInput: document.querySelector("#start-date-input"),
+  endDateInput: document.querySelector("#end-date-input"),
+  resetDatesButton: document.querySelector("#reset-dates-button"),
   dataSourceNote: document.querySelector("#data-source-note"),
+  dateRangeNote: document.querySelector("#date-range-note"),
   thresholdValue: document.querySelector("#threshold-value"),
   windowDays: document.querySelector("#window-days"),
   generatedAt: document.querySelector("#generated-at"),
@@ -59,6 +69,36 @@ function attachEventListeners() {
     }
   });
 
+  const handleDateChange = () => {
+    if (!state.supportsDateFiltering) {
+      return;
+    }
+
+    const normalized = normalizeDateWindow(
+      elements.startDateInput.value || state.availableStartDate,
+      elements.endDateInput.value || state.availableEndDate,
+      state.availableStartDate,
+      state.availableEndDate
+    );
+    state.selectedStartDate = normalized.start;
+    state.selectedEndDate = normalized.end;
+    syncDateInputs();
+    render();
+  };
+
+  elements.startDateInput.addEventListener("change", handleDateChange);
+  elements.endDateInput.addEventListener("change", handleDateChange);
+
+  elements.resetDatesButton.addEventListener("click", () => {
+    if (!state.supportsDateFiltering) {
+      return;
+    }
+    state.selectedStartDate = state.availableStartDate;
+    state.selectedEndDate = state.availableEndDate;
+    syncDateInputs();
+    render();
+  });
+
   elements.searchInput.addEventListener("input", (event) => {
     state.search = event.target.value.trim().toLowerCase();
     render();
@@ -88,6 +128,16 @@ async function loadSampleReport() {
 function applyReport(report, message) {
   validateReport(report);
   state.report = report;
+  state.dataSourceMessage = message;
+  state.supportsDateFiltering = hasServerMetricSeries(report);
+
+  const availableWindow = getAvailableDateWindow(report);
+  state.availableStartDate = availableWindow.start;
+  state.availableEndDate = availableWindow.end;
+  state.selectedStartDate = availableWindow.start;
+  state.selectedEndDate = availableWindow.end;
+
+  syncDateInputs();
   elements.dataSourceNote.textContent = message;
   render();
 }
@@ -99,9 +149,6 @@ function validateReport(report) {
   if (!Array.isArray(report.servers)) {
     throw new Error("Report payload is missing a servers array.");
   }
-  if (!report.summary || typeof report.summary !== "object") {
-    throw new Error("Report payload is missing the summary object.");
-  }
 }
 
 function render() {
@@ -109,36 +156,204 @@ function render() {
     return;
   }
 
-  const report = state.report;
-  const servers = report.servers ?? [];
-  const visibleServers = servers.filter((server) => {
+  const view = buildViewModel(state.report);
+  const visibleServers = view.servers.filter((server) => {
     const matchesFilter =
-      state.filter === "all" ||
-      server.status.toLowerCase() === state.filter;
+      state.filter === "all" || server.status.toLowerCase() === state.filter;
     const matchesSearch =
       !state.search || server.server_id.toLowerCase().includes(state.search);
     return matchesFilter && matchesSearch;
   });
 
-  renderSummary(report, servers);
+  renderDateNotes(view);
+  renderSummary(view);
   renderServers(visibleServers);
   renderRecommendations(visibleServers);
-  renderWarnings(report.warnings ?? []);
-  renderMissing(report.missing_servers ?? []);
+  renderWarnings(view.warnings);
+  renderMissing(state.report.missing_servers ?? []);
 }
 
-function renderSummary(report, servers) {
-  const summary = report.summary ?? {};
+function buildViewModel(report) {
+  const threshold = Number(report.threshold_percent ?? 40);
+  const warnings = [...(report.warnings ?? [])];
+
+  if (!state.supportsDateFiltering) {
+    const servers = report.servers ?? [];
+    return {
+      servers,
+      summary: computeSummary(servers),
+      warnings,
+      windowDays:
+        report.analysis_window?.days ??
+        inclusiveDayDifference(
+          state.availableStartDate,
+          state.availableEndDate
+        ),
+    };
+  }
+
+  const metricsIndex = new Map(
+    (report.server_metrics ?? []).map((entry) => [entry.server_id, entry.metrics])
+  );
+  const derivedServers = [];
+  for (const server of report.servers ?? []) {
+    const recalculated = deriveServerForWindow(
+      server,
+      metricsIndex.get(server.server_id),
+      threshold,
+      state.selectedStartDate,
+      state.selectedEndDate
+    );
+    if (!recalculated) {
+      warnings.push(
+        `No metric samples were available for ${server.server_id} in the selected date window.`
+      );
+      continue;
+    }
+    derivedServers.push(recalculated);
+  }
+
+  return {
+    servers: derivedServers,
+    summary: computeSummary(derivedServers),
+    warnings: uniqueStrings(warnings),
+    windowDays: inclusiveDayDifference(
+      state.selectedStartDate,
+      state.selectedEndDate
+    ),
+  };
+}
+
+function deriveServerForWindow(
+  server,
+  metrics,
+  threshold,
+  startDate,
+  endDate
+) {
+  const cpuPoints = filterPointsByDate(
+    metrics?.cpu?.points ?? [],
+    startDate,
+    endDate
+  );
+  const memoryPoints = filterPointsByDate(
+    metrics?.memory?.points ?? [],
+    startDate,
+    endDate
+  );
+
+  if (cpuPoints.length === 0 || memoryPoints.length === 0) {
+    return null;
+  }
+
+  const avgCpu = average(cpuPoints.map((point) => point.value_percent));
+  const avgMemory = average(memoryPoints.map((point) => point.value_percent));
+  const utilizationScore = Math.max(avgCpu, avgMemory);
+  const underutilized = utilizationScore < threshold;
+  const monthlyCost =
+    typeof server.monthly_cost === "number" ? server.monthly_cost : null;
+  const annualCost =
+    typeof server.annual_cost === "number"
+      ? server.annual_cost
+      : monthlyCost !== null
+        ? monthlyCost * 12
+        : null;
+
+  return {
+    ...server,
+    analysis_window_days: inclusiveDayDifference(startDate, endDate),
+    avg_cpu: avgCpu,
+    avg_memory: avgMemory,
+    utilization_score: utilizationScore,
+    status: underutilized ? "Underutilized" : "Healthy",
+    monthly_cost: monthlyCost,
+    annual_cost: annualCost,
+    monthly_savings_if_removed: underutilized ? monthlyCost : monthlyCost !== null ? 0 : null,
+    annual_savings_if_removed: underutilized ? annualCost : annualCost !== null ? 0 : null,
+    recommendation: underutilized
+      ? "Review for removal or consolidation"
+      : "Keep in service",
+    rationale: buildRationale({
+      serverId: server.server_id,
+      utilizationScore,
+      threshold,
+      dayCount: inclusiveDayDifference(startDate, endDate),
+      underutilized,
+      monthlyCost,
+      annualCost,
+      currency: server.currency,
+    }),
+  };
+}
+
+function buildRationale({
+  serverId,
+  utilizationScore,
+  threshold,
+  dayCount,
+  underutilized,
+  monthlyCost,
+  annualCost,
+  currency,
+}) {
+  if (!underutilized) {
+    return `${serverId} is operating above the ${threshold.toFixed(
+      1
+    )}% threshold with a ${utilizationScore.toFixed(
+      1
+    )}% utilization score over the selected ${dayCount}-day window.`;
+  }
+
+  if (typeof monthlyCost !== "number" || typeof annualCost !== "number") {
+    return `${serverId} averaged ${utilizationScore.toFixed(
+      1
+    )}% utilization over the selected ${dayCount}-day window, which is below the ${threshold.toFixed(
+      1
+    )}% threshold. The server should be reviewed for removal or consolidation, but no cost data was supplied for savings estimation.`;
+  }
+
+  return `${serverId} averaged ${utilizationScore.toFixed(
+    1
+  )}% utilization over the selected ${dayCount}-day window, which is below the ${threshold.toFixed(
+    1
+  )}% threshold. If it can be safely removed or consolidated, the organization could avoid about ${currency} ${monthlyCost.toFixed(
+    2
+  )} per month and ${currency} ${annualCost.toFixed(2)} per year.`;
+}
+
+function computeSummary(servers) {
+  const underutilizedServers = servers.filter(
+    (server) => server.status.toLowerCase() === "underutilized"
+  );
+  const healthyServers = servers.length - underutilizedServers.length;
+  return {
+    servers_analyzed: servers.length,
+    underutilized_servers: underutilizedServers.length,
+    healthy_servers: healthyServers,
+    potential_monthly_savings_by_currency: aggregateSavingsByCurrency(
+      underutilizedServers,
+      "monthly_savings_if_removed"
+    ),
+    potential_annual_savings_by_currency: aggregateSavingsByCurrency(
+      underutilizedServers,
+      "annual_savings_if_removed"
+    ),
+  };
+}
+
+function renderSummary(view) {
+  const summary = view.summary;
   const underutilized = Number(summary.underutilized_servers ?? 0);
   const healthy = Number(summary.healthy_servers ?? 0);
   const total = Math.max(underutilized + healthy, 1);
   const monthlyTotals = summary.potential_monthly_savings_by_currency ?? {};
   const annualTotals = summary.potential_annual_savings_by_currency ?? {};
-  const analysisWindowDays = report.analysis_window?.days ?? "-";
-  const generatedAt = formatDate(report.generated_at);
+  const generatedAt = formatDate(state.report.generated_at);
 
-  elements.thresholdValue.textContent = `${Number(report.threshold_percent ?? 0).toFixed(1)}%`;
-  elements.windowDays.textContent = `${analysisWindowDays} days`;
+  elements.thresholdValue.textContent = `${Number(
+    state.report.threshold_percent ?? 0
+  ).toFixed(1)}%`;
+  elements.windowDays.textContent = `${view.windowDays} days`;
   elements.generatedAt.textContent = generatedAt;
 
   elements.underutilizedCount.textContent = String(underutilized);
@@ -146,24 +361,27 @@ function renderSummary(report, servers) {
   elements.monthlySavings.textContent = formatSavingsBuckets(monthlyTotals);
   elements.annualSavings.textContent = formatSavingsBuckets(annualTotals);
 
-  elements.distributionUnderutilized.style.width = `${(underutilized / total) * 100}%`;
+  elements.distributionUnderutilized.style.width = `${
+    (underutilized / total) * 100
+  }%`;
   elements.distributionHealthy.style.width = `${(healthy / total) * 100}%`;
 
-  const highestSavingsServer = [...servers]
+  const highestSavingsServer = [...view.servers]
     .filter((server) => typeof server.monthly_savings_if_removed === "number")
     .sort(
       (left, right) =>
-        (right.monthly_savings_if_removed ?? 0) - (left.monthly_savings_if_removed ?? 0)
+        (right.monthly_savings_if_removed ?? 0) -
+        (left.monthly_savings_if_removed ?? 0)
     )[0];
 
   const insightCards = [
     {
       label: "Servers analyzed",
-      value: String(summary.servers_analyzed ?? servers.length),
+      value: String(summary.servers_analyzed ?? view.servers.length),
     },
     {
       label: "Threshold",
-      value: `${Number(report.threshold_percent ?? 0).toFixed(1)}%`,
+      value: `${Number(state.report.threshold_percent ?? 0).toFixed(1)}%`,
     },
     {
       label: "Largest monthly opportunity",
@@ -299,6 +517,137 @@ function renderMissing(missingServers) {
     .join("");
 }
 
+function renderDateNotes(view) {
+  if (!state.supportsDateFiltering) {
+    elements.dateRangeNote.textContent =
+      "This report does not include raw metric samples, so date changes are disabled.";
+    return;
+  }
+
+  const available = `${formatDateLabel(
+    state.availableStartDate
+  )} to ${formatDateLabel(state.availableEndDate)}`;
+  const selected = `${formatDateLabel(
+    state.selectedStartDate
+  )} to ${formatDateLabel(state.selectedEndDate)}`;
+  const fullWindowSelected =
+    state.selectedStartDate === state.availableStartDate &&
+    state.selectedEndDate === state.availableEndDate;
+
+  elements.dateRangeNote.textContent = fullWindowSelected
+    ? `Available range: ${available}. Showing the full loaded window.`
+    : `Available range: ${available}. Recalculating metrics for ${selected} (${view.windowDays} days).`;
+}
+
+function syncDateInputs() {
+  elements.startDateInput.min = state.availableStartDate;
+  elements.startDateInput.max = state.availableEndDate;
+  elements.endDateInput.min = state.availableStartDate;
+  elements.endDateInput.max = state.availableEndDate;
+  elements.startDateInput.value = state.selectedStartDate;
+  elements.endDateInput.value = state.selectedEndDate;
+
+  const disabled = !state.supportsDateFiltering;
+  elements.startDateInput.disabled = disabled;
+  elements.endDateInput.disabled = disabled;
+  elements.resetDatesButton.disabled = disabled;
+}
+
+function hasServerMetricSeries(report) {
+  return (report.server_metrics ?? []).some((entry) =>
+    Object.values(entry.metrics ?? {}).some(
+      (metric) => Array.isArray(metric.points) && metric.points.length > 0
+    )
+  );
+}
+
+function getAvailableDateWindow(report) {
+  const dates = [];
+  for (const entry of report.server_metrics ?? []) {
+    for (const metric of Object.values(entry.metrics ?? {})) {
+      for (const point of metric.points ?? []) {
+        const dateValue = toDateInputValue(point.timestamp);
+        if (dateValue) {
+          dates.push(dateValue);
+        }
+      }
+    }
+  }
+
+  if (dates.length > 0) {
+    dates.sort();
+    return {
+      start: dates[0],
+      end: dates[dates.length - 1],
+    };
+  }
+
+  const start = toDateInputValue(report.analysis_window?.start);
+  const end = toDateInputValue(report.analysis_window?.end);
+  if (start && end) {
+    return { start, end };
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  return { start: today, end: today };
+}
+
+function normalizeDateWindow(start, end, min, max) {
+  let normalizedStart = clampDateString(start, min, max);
+  let normalizedEnd = clampDateString(end, min, max);
+  if (normalizedStart > normalizedEnd) {
+    [normalizedStart, normalizedEnd] = [normalizedEnd, normalizedStart];
+  }
+  return { start: normalizedStart, end: normalizedEnd };
+}
+
+function clampDateString(value, min, max) {
+  if (!value) {
+    return min;
+  }
+  if (value < min) {
+    return min;
+  }
+  if (value > max) {
+    return max;
+  }
+  return value;
+}
+
+function filterPointsByDate(points, startDate, endDate) {
+  const start = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T23:59:59.999Z`);
+  return points.filter((point) => {
+    const timestamp = new Date(point.timestamp);
+    return timestamp >= start && timestamp <= end;
+  });
+}
+
+function aggregateSavingsByCurrency(servers, key) {
+  return servers.reduce((totals, server) => {
+    const amount = server[key];
+    if (typeof amount !== "number") {
+      return totals;
+    }
+    totals[server.currency] = (totals[server.currency] ?? 0) + amount;
+    return totals;
+  }, {});
+}
+
+function inclusiveDayDifference(startDate, endDate) {
+  const start = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
+  return Math.round((end - start) / 86400000) + 1;
+}
+
+function average(values) {
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function uniqueStrings(values) {
+  return [...new Set(values)];
+}
+
 function statusClass(status) {
   return status.toLowerCase() === "underutilized" ? "underutilized" : "healthy";
 }
@@ -351,6 +700,29 @@ function formatDate(value) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
+}
+
+function formatDateLabel(value) {
+  if (!value) {
+    return "-";
+  }
+
+  const date = new Date(`${value}T00:00:00Z`);
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeZone: "UTC",
+  }).format(date);
+}
+
+function toDateInputValue(value) {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) {
+    return "";
+  }
+  return date.toISOString().slice(0, 10);
 }
 
 function showLoadError(message) {

@@ -151,8 +151,43 @@ body::after {
   margin-top: 1.5rem;
 }
 
+.date-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  gap: 0.75rem;
+  align-items: end;
+  margin-top: 1rem;
+}
+
+.date-control {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.date-control label {
+  color: var(--muted);
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.date-control input,
+.search-input {
+  font: inherit;
+}
+
+.date-control input {
+  min-height: 3rem;
+  padding: 0.75rem 0.95rem;
+  border: 1px solid rgba(31, 36, 48, 0.12);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--ink);
+}
+
 .primary-button,
 .secondary-button,
+.ghost-button,
 .filter-button {
   appearance: none;
   border: 0;
@@ -166,7 +201,8 @@ body::after {
 }
 
 .primary-button,
-.secondary-button {
+.secondary-button,
+.ghost-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -188,11 +224,19 @@ body::after {
   border: 1px solid rgba(31, 36, 48, 0.12);
 }
 
+.ghost-button {
+  background: rgba(31, 36, 48, 0.05);
+  color: var(--ink);
+  border: 1px solid rgba(31, 36, 48, 0.1);
+}
+
 .primary-button:hover,
 .secondary-button:hover,
+.ghost-button:hover,
 .filter-button:hover,
 .primary-button:focus-visible,
 .secondary-button:focus-visible,
+.ghost-button:focus-visible,
 .filter-button:focus-visible {
   transform: translateY(-1px);
   box-shadow: 0 12px 18px rgba(31, 36, 48, 0.14);
@@ -363,6 +407,20 @@ body::after {
 .search-input:focus-visible {
   outline: 2px solid rgba(35, 100, 170, 0.28);
   outline-offset: 2px;
+}
+
+.date-control input:focus-visible {
+  outline: 2px solid rgba(212, 91, 67, 0.24);
+  outline-offset: 2px;
+}
+
+button:disabled,
+input:disabled,
+.secondary-button:has(+ input:disabled) {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .filter-group {
@@ -682,6 +740,10 @@ tbody tr:hover {
   }
 
   .panel-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .date-controls {
     grid-template-columns: 1fr;
   }
 }

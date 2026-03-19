@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 import math
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from string import Template
 from urllib import error, request
 
 from server_utilization_agent.config import GrafanaConfig, MetricQueryConfig
 from server_utilization_agent.models import (
+    MetricPoint,
     MetricSnapshot,
     MetricsCollectionResult,
     ServerMetrics,
@@ -35,8 +37,6 @@ class MockMetricsProvider(BaseMetricsProvider):
         server_ids: list[str],
         time_range: TimeRange,
     ) -> MetricsCollectionResult:
-        del time_range
-
         metrics: list[ServerMetrics] = []
         missing_servers: list[str] = []
         warnings: list[str] = []
@@ -48,12 +48,19 @@ class MockMetricsProvider(BaseMetricsProvider):
                 continue
 
             try:
-                cpu_snapshot = MetricSnapshot.from_values("cpu", raw_metrics["cpu"])
-                memory_snapshot = MetricSnapshot.from_values(
-                    "memory", raw_metrics["memory"]
+                cpu_snapshot = MetricSnapshot.from_points(
+                    "cpu",
+                    self._build_mock_points(raw_metrics["cpu"], time_range),
+                )
+                memory_snapshot = MetricSnapshot.from_points(
+                    "memory",
+                    self._build_mock_points(raw_metrics["memory"], time_range),
                 )
                 extra_snapshots = {
-                    name: MetricSnapshot.from_values(name, values)
+                    name: MetricSnapshot.from_points(
+                        name,
+                        self._build_mock_points(values, time_range),
+                    )
                     for name, values in raw_metrics.items()
                     if name not in {"cpu", "memory"}
                 }
@@ -77,6 +84,32 @@ class MockMetricsProvider(BaseMetricsProvider):
             missing_servers=missing_servers,
             warnings=warnings,
         )
+
+    @staticmethod
+    def _build_mock_points(
+        values: list[float],
+        time_range: TimeRange,
+    ) -> list[MetricPoint]:
+        if not values:
+            raise ValueError("Mock metric values cannot be empty")
+
+        if len(values) == 1:
+            return [
+                MetricPoint(
+                    timestamp=time_range.end,
+                    value_percent=float(values[0]),
+                )
+            ]
+
+        total_duration = time_range.end - time_range.start
+        step = total_duration / (len(values) - 1)
+        return [
+            MetricPoint(
+                timestamp=time_range.start + (step * index),
+                value_percent=float(value),
+            )
+            for index, value in enumerate(values)
+        ]
 
 
 class GrafanaPrometheusProvider(BaseMetricsProvider):
@@ -171,13 +204,13 @@ class GrafanaPrometheusProvider(BaseMetricsProvider):
             payload=payload,
             token=token,
         )
-        values = self._extract_numeric_values(response, query_config.ref_id)
-        if not values:
+        points = self._extract_time_series_points(response, query_config.ref_id)
+        if not points:
             raise MissingMetricDataError(
                 f"No {metric_name} data returned for server '{server_id}'"
             )
 
-        return MetricSnapshot.from_values(metric_name, values)
+        return MetricSnapshot.from_points(metric_name, points)
 
     def _post_json(self, url: str, payload: dict, token: str) -> dict:
         body = json.dumps(payload).encode("utf-8")
@@ -199,33 +232,94 @@ class GrafanaPrometheusProvider(BaseMetricsProvider):
         except error.URLError as exc:
             raise RuntimeError(f"Grafana query failed: {exc.reason}") from exc
 
-    def _extract_numeric_values(self, response: dict, ref_id: str) -> list[float]:
+    def _extract_time_series_points(
+        self,
+        response: dict,
+        ref_id: str,
+    ) -> list[MetricPoint]:
         result = response.get("results", {}).get(ref_id, {})
         if result.get("error"):
-            raise RuntimeError(f"Grafana returned an error for refId {ref_id}: {result['error']}")
+            raise RuntimeError(
+                f"Grafana returned an error for refId {ref_id}: {result['error']}"
+            )
 
-        values: list[float] = []
+        points: list[MetricPoint] = []
         for frame in result.get("frames", []):
             schema_fields = frame.get("schema", {}).get("fields", [])
             columns = frame.get("data", {}).get("values", [])
-            for field, column in zip(schema_fields, columns):
-                field_type = (field or {}).get("type")
-                if field_type != "number":
+            frame_points = self._extract_points_from_frame(schema_fields, columns)
+            points.extend(frame_points)
+        return sorted(points, key=lambda point: point.timestamp)
+
+    def _extract_points_from_frame(
+        self,
+        schema_fields: list[dict],
+        columns: list[list[object]],
+    ) -> list[MetricPoint]:
+        time_column: list[datetime] | None = None
+        numeric_columns: list[list[float | None]] = []
+
+        for field, column in zip(schema_fields, columns):
+            field_type = (field or {}).get("type")
+            if field_type == "time":
+                time_column = self._normalize_time_column(column)
+            elif field_type == "number":
+                numeric_columns.append(self._normalize_numeric_column(column))
+
+        if time_column is None or not numeric_columns:
+            return []
+
+        point_count = min(len(time_column), *(len(column) for column in numeric_columns))
+        points: list[MetricPoint] = []
+        for numeric_column in numeric_columns:
+            for index in range(point_count):
+                value = numeric_column[index]
+                timestamp = time_column[index]
+                if value is None:
                     continue
-                values.extend(self._normalize_numeric_column(column))
-        return values
+                points.append(
+                    MetricPoint(
+                        timestamp=timestamp,
+                        value_percent=value,
+                    )
+                )
+        return points
 
     @staticmethod
-    def _normalize_numeric_column(column: list[object]) -> list[float]:
-        normalized: list[float] = []
+    def _normalize_numeric_column(column: list[object]) -> list[float | None]:
+        normalized: list[float | None] = []
         for value in column:
             if value is None:
+                normalized.append(None)
                 continue
             numeric = float(value)
             if math.isnan(numeric):
+                normalized.append(None)
                 continue
             normalized.append(numeric)
         return normalized
+
+    @staticmethod
+    def _normalize_time_column(column: list[object]) -> list[datetime]:
+        timestamps: list[datetime] = []
+        for raw_value in column:
+            if raw_value is None:
+                continue
+            timestamps.append(GrafanaPrometheusProvider._parse_timestamp(raw_value))
+        return timestamps
+
+    @staticmethod
+    def _parse_timestamp(raw_value: object) -> datetime:
+        if isinstance(raw_value, (int, float)):
+            timestamp = float(raw_value)
+            if timestamp > 1_000_000_000_000:
+                return datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc)
+            return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+
+        text = str(raw_value)
+        if text.endswith("Z"):
+            text = text.replace("Z", "+00:00")
+        return datetime.fromisoformat(text).astimezone(timezone.utc)
 
 
 class MissingMetricDataError(RuntimeError):

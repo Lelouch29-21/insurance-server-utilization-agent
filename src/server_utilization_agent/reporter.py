@@ -5,7 +5,13 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-from server_utilization_agent.models import ReportArtifacts, ServerAnalysis, TimeRange
+from server_utilization_agent.models import (
+    MetricSnapshot,
+    ReportArtifacts,
+    ServerAnalysis,
+    ServerMetrics,
+    TimeRange,
+)
 
 
 class ReportWriter:
@@ -16,6 +22,7 @@ class ReportWriter:
     def write(
         self,
         analyses: list[ServerAnalysis],
+        server_metrics: list[ServerMetrics],
         missing_servers: list[str],
         warnings: list[str],
         time_range: TimeRange,
@@ -32,7 +39,13 @@ class ReportWriter:
         )
         json_path.write_text(
             json.dumps(
-                self._render_json_payload(analyses, missing_servers, warnings, time_range),
+                self._render_json_payload(
+                    analyses,
+                    server_metrics,
+                    missing_servers,
+                    warnings,
+                    time_range,
+                ),
                 indent=2,
             )
         )
@@ -135,6 +148,7 @@ class ReportWriter:
     def _render_json_payload(
         self,
         analyses: list[ServerAnalysis],
+        server_metrics: list[ServerMetrics],
         missing_servers: list[str],
         warnings: list[str],
         time_range: TimeRange,
@@ -162,6 +176,7 @@ class ReportWriter:
                 ),
             },
             "servers": [asdict(item) for item in analyses],
+            "server_metrics": [self._serialize_server_metrics(item) for item in server_metrics],
             "missing_servers": missing_servers,
             "warnings": warnings,
         }
@@ -197,3 +212,32 @@ class ReportWriter:
             self._format_currency(amount, currency)
             for currency, amount in sorted(totals.items())
         )
+
+    def _serialize_server_metrics(self, metrics: ServerMetrics) -> dict:
+        return {
+            "server_id": metrics.server_id,
+            "metrics": {
+                "cpu": self._serialize_metric_snapshot(metrics.cpu),
+                "memory": self._serialize_metric_snapshot(metrics.memory),
+                **{
+                    name: self._serialize_metric_snapshot(snapshot)
+                    for name, snapshot in metrics.extras.items()
+                },
+            },
+        }
+
+    @staticmethod
+    def _serialize_metric_snapshot(snapshot: MetricSnapshot) -> dict:
+        return {
+            "average_percent": snapshot.average_percent,
+            "minimum_percent": snapshot.minimum_percent,
+            "maximum_percent": snapshot.maximum_percent,
+            "sample_count": snapshot.sample_count,
+            "points": [
+                {
+                    "timestamp": point.timestamp.isoformat(),
+                    "value_percent": point.value_percent,
+                }
+                for point in snapshot.points
+            ],
+        }

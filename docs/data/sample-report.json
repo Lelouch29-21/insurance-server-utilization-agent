@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-03-19T11:50:39.947383+00:00",
+  "generated_at": "2026-03-19T12:13:17.709584+00:00",
   "analysis_window": {
-    "start": "2026-02-17T11:50:39.946871+00:00",
-    "end": "2026-03-19T11:50:39.946871+00:00",
+    "start": "2026-02-18T00:00:00+00:00",
+    "end": "2026-03-19T12:13:17.709050+00:00",
     "days": 30
   },
   "threshold_percent": 40.0,
@@ -77,6 +77,215 @@
         "The server may still support standby, failover, or critical workloads.",
         "Confirm dependencies with application owners before removing the server."
       ]
+    }
+  ],
+  "server_metrics": [
+    {
+      "server_id": "app-server-01",
+      "metrics": {
+        "cpu": {
+          "average_percent": 22.5,
+          "minimum_percent": 20.0,
+          "maximum_percent": 25.0,
+          "sample_count": 6,
+          "points": [
+            {
+              "timestamp": "2026-02-18T00:00:00+00:00",
+              "value_percent": 22.0
+            },
+            {
+              "timestamp": "2026-02-23T21:38:39.541810+00:00",
+              "value_percent": 24.0
+            },
+            {
+              "timestamp": "2026-03-01T19:17:19.083620+00:00",
+              "value_percent": 21.0
+            },
+            {
+              "timestamp": "2026-03-07T16:55:58.625430+00:00",
+              "value_percent": 23.0
+            },
+            {
+              "timestamp": "2026-03-13T14:34:38.167240+00:00",
+              "value_percent": 20.0
+            },
+            {
+              "timestamp": "2026-03-19T12:13:17.709050+00:00",
+              "value_percent": 25.0
+            }
+          ]
+        },
+        "memory": {
+          "average_percent": 31.0,
+          "minimum_percent": 29.0,
+          "maximum_percent": 33.0,
+          "sample_count": 6,
+          "points": [
+            {
+              "timestamp": "2026-02-18T00:00:00+00:00",
+              "value_percent": 31.0
+            },
+            {
+              "timestamp": "2026-02-23T21:38:39.541810+00:00",
+              "value_percent": 30.0
+            },
+            {
+              "timestamp": "2026-03-01T19:17:19.083620+00:00",
+              "value_percent": 32.0
+            },
+            {
+              "timestamp": "2026-03-07T16:55:58.625430+00:00",
+              "value_percent": 29.0
+            },
+            {
+              "timestamp": "2026-03-13T14:34:38.167240+00:00",
+              "value_percent": 33.0
+            },
+            {
+              "timestamp": "2026-03-19T12:13:17.709050+00:00",
+              "value_percent": 31.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "server_id": "app-server-02",
+      "metrics": {
+        "cpu": {
+          "average_percent": 50.5,
+          "minimum_percent": 48.0,
+          "maximum_percent": 53.0,
+          "sample_count": 6,
+          "points": [
+            {
+              "timestamp": "2026-02-18T00:00:00+00:00",
+              "value_percent": 51.0
+            },
+            {
+              "timestamp": "2026-02-23T21:38:39.541810+00:00",
+              "value_percent": 49.0
+            },
+            {
+              "timestamp": "2026-03-01T19:17:19.083620+00:00",
+              "value_percent": 53.0
+            },
+            {
+              "timestamp": "2026-03-07T16:55:58.625430+00:00",
+              "value_percent": 50.0
+            },
+            {
+              "timestamp": "2026-03-13T14:34:38.167240+00:00",
+              "value_percent": 52.0
+            },
+            {
+              "timestamp": "2026-03-19T12:13:17.709050+00:00",
+              "value_percent": 48.0
+            }
+          ]
+        },
+        "memory": {
+          "average_percent": 44.833333333333336,
+          "minimum_percent": 43.0,
+          "maximum_percent": 47.0,
+          "sample_count": 6,
+          "points": [
+            {
+              "timestamp": "2026-02-18T00:00:00+00:00",
+              "value_percent": 44.0
+            },
+            {
+              "timestamp": "2026-02-23T21:38:39.541810+00:00",
+              "value_percent": 46.0
+            },
+            {
+              "timestamp": "2026-03-01T19:17:19.083620+00:00",
+              "value_percent": 45.0
+            },
+            {
+              "timestamp": "2026-03-07T16:55:58.625430+00:00",
+              "value_percent": 43.0
+            },
+            {
+              "timestamp": "2026-03-13T14:34:38.167240+00:00",
+              "value_percent": 47.0
+            },
+            {
+              "timestamp": "2026-03-19T12:13:17.709050+00:00",
+              "value_percent": 44.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "server_id": "batch-server-03",
+      "metrics": {
+        "cpu": {
+          "average_percent": 18.833333333333332,
+          "minimum_percent": 17.0,
+          "maximum_percent": 21.0,
+          "sample_count": 6,
+          "points": [
+            {
+              "timestamp": "2026-02-18T00:00:00+00:00",
+              "value_percent": 18.0
+            },
+            {
+              "timestamp": "2026-02-23T21:38:39.541810+00:00",
+              "value_percent": 17.0
+            },
+            {
+              "timestamp": "2026-03-01T19:17:19.083620+00:00",
+              "value_percent": 21.0
+            },
+            {
+              "timestamp": "2026-03-07T16:55:58.625430+00:00",
+              "value_percent": 19.0
+            },
+            {
+              "timestamp": "2026-03-13T14:34:38.167240+00:00",
+              "value_percent": 20.0
+            },
+            {
+              "timestamp": "2026-03-19T12:13:17.709050+00:00",
+              "value_percent": 18.0
+            }
+          ]
+        },
+        "memory": {
+          "average_percent": 28.833333333333332,
+          "minimum_percent": 27.0,
+          "maximum_percent": 31.0,
+          "sample_count": 6,
+          "points": [
+            {
+              "timestamp": "2026-02-18T00:00:00+00:00",
+              "value_percent": 28.0
+            },
+            {
+              "timestamp": "2026-02-23T21:38:39.541810+00:00",
+              "value_percent": 27.0
+            },
+            {
+              "timestamp": "2026-03-01T19:17:19.083620+00:00",
+              "value_percent": 30.0
+            },
+            {
+              "timestamp": "2026-03-07T16:55:58.625430+00:00",
+              "value_percent": 29.0
+            },
+            {
+              "timestamp": "2026-03-13T14:34:38.167240+00:00",
+              "value_percent": 31.0
+            },
+            {
+              "timestamp": "2026-03-19T12:13:17.709050+00:00",
+              "value_percent": 28.0
+            }
+          ]
+        }
+      }
     }
   ],
   "missing_servers": [],

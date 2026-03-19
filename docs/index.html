@@ -41,8 +41,24 @@
               accept=".json,application/json"
             />
           </div>
+          <div class="date-controls">
+            <div class="date-control">
+              <label for="start-date-input">Start date</label>
+              <input id="start-date-input" type="date" />
+            </div>
+            <div class="date-control">
+              <label for="end-date-input">End date</label>
+              <input id="end-date-input" type="date" />
+            </div>
+            <button class="ghost-button" id="reset-dates-button" type="button">
+              Reset window
+            </button>
+          </div>
           <p class="hero-note" id="data-source-note">
             Showing bundled sample data from the generated MVP report.
+          </p>
+          <p class="hero-note" id="date-range-note">
+            Date controls recalculate metrics within the loaded report window.
           </p>
         </div>
 
