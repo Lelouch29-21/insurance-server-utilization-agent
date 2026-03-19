@@ -1,0 +1,4 @@
+server_id,monthly_cost,currency
+app-server-01,180,USD
+app-server-02,180,USD
+batch-server-03,250,USD

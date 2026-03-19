@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Server Utilization Command Center</title>
+    <meta
+      name="description"
+      content="Interactive dashboard for reviewing server utilization reports and cost-saving opportunities."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Server Utilization Agent UI</p>
+          <h1>Command center for underutilized infrastructure.</h1>
+          <p class="hero-text">
+            Review the latest utilization report, highlight servers below the
+            40% threshold, and surface the savings available from safe
+            decommissioning or consolidation.
+          </p>
+          <div class="hero-actions">
+            <button class="primary-button" id="load-sample-button" type="button">
+              Load Sample Report
+            </button>
+            <label class="secondary-button" for="report-upload">
+              Upload JSON Report
+            </label>
+            <input
+              id="report-upload"
+              class="visually-hidden"
+              type="file"
+              accept=".json,application/json"
+            />
+          </div>
+          <p class="hero-note" id="data-source-note">
+            Showing bundled sample data from the generated MVP report.
+          </p>
+        </div>
+
+        <aside class="hero-panel">
+          <div class="panel-chip">Flag rule</div>
+          <p class="panel-metric" id="threshold-value">40.0%</p>
+          <p class="panel-caption">Any server below this utilization score is marked underutilized.</p>
+          <div class="panel-grid">
+            <div>
+              <span>Window</span>
+              <strong id="window-days">30 days</strong>
+            </div>
+            <div>
+              <span>Updated</span>
+              <strong id="generated-at">-</strong>
+            </div>
+          </div>
+        </aside>
+      </header>
+
+      <main class="dashboard">
+        <section class="summary-grid" aria-label="Summary metrics">
+          <article class="metric-card accent-red">
+            <span class="metric-label">Underutilized</span>
+            <strong class="metric-value" id="underutilized-count">0</strong>
+            <p class="metric-footnote">Servers below the threshold.</p>
+          </article>
+          <article class="metric-card accent-green">
+            <span class="metric-label">Healthy</span>
+            <strong class="metric-value" id="healthy-count">0</strong>
+            <p class="metric-footnote">Servers staying above the threshold.</p>
+          </article>
+          <article class="metric-card accent-amber">
+            <span class="metric-label">Monthly savings</span>
+            <strong class="metric-value" id="monthly-savings">-</strong>
+            <p class="metric-footnote">Combined avoidable spend from flagged servers.</p>
+          </article>
+          <article class="metric-card accent-blue">
+            <span class="metric-label">Annual savings</span>
+            <strong class="metric-value" id="annual-savings">-</strong>
+            <p class="metric-footnote">Potential yearly impact if safe to remove.</p>
+          </article>
+        </section>
+
+        <section class="panel layout-panel">
+          <div class="panel-header">
+            <div>
+              <p class="section-kicker">Fleet Snapshot</p>
+              <h2>Utilization mix</h2>
+            </div>
+          </div>
+
+          <div class="distribution">
+            <div class="distribution-bar" aria-hidden="true">
+              <div class="distribution-segment underutilized" id="distribution-underutilized"></div>
+              <div class="distribution-segment healthy" id="distribution-healthy"></div>
+            </div>
+            <div class="distribution-legend">
+              <span><i class="legend-swatch underutilized"></i>Underutilized</span>
+              <span><i class="legend-swatch healthy"></i>Healthy</span>
+            </div>
+          </div>
+
+          <div class="insight-strip" id="insight-strip"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header split-header">
+            <div>
+              <p class="section-kicker">Interactive Review</p>
+              <h2>Servers</h2>
+            </div>
+            <div class="toolbar">
+              <input
+                id="search-input"
+                class="search-input"
+                type="search"
+                placeholder="Search server..."
+                aria-label="Search server"
+              />
+              <div class="filter-group" role="tablist" aria-label="Status filters">
+                <button class="filter-button active" data-filter="all" type="button">All</button>
+                <button class="filter-button" data-filter="underutilized" type="button">Underutilized</button>
+                <button class="filter-button" data-filter="healthy" type="button">Healthy</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="server-grid" id="server-grid"></div>
+          <p class="empty-state hidden" id="empty-state">No servers match this filter.</p>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="section-kicker">Report Table</p>
+              <h2>Detailed view</h2>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Server</th>
+                  <th>CPU</th>
+                  <th>Memory</th>
+                  <th>Score</th>
+                  <th>Status</th>
+                  <th>Monthly cost</th>
+                  <th>Savings if removed</th>
+                </tr>
+              </thead>
+              <tbody id="server-table-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel recommendations-panel">
+          <div class="panel-header">
+            <div>
+              <p class="section-kicker">Narrative Output</p>
+              <h2>Recommendations</h2>
+            </div>
+          </div>
+          <div id="recommendations-list" class="recommendations-list"></div>
+        </section>
+
+        <section class="panel hidden" id="warnings-panel">
+          <div class="panel-header">
+            <div>
+              <p class="section-kicker">Data Quality</p>
+              <h2>Warnings</h2>
+            </div>
+          </div>
+          <ul class="message-list" id="warnings-list"></ul>
+        </section>
+
+        <section class="panel hidden" id="missing-panel">
+          <div class="panel-header">
+            <div>
+              <p class="section-kicker">Coverage</p>
+              <h2>Missing servers</h2>
+            </div>
+          </div>
+          <ul class="message-list" id="missing-list"></ul>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "threshold_percent": 40,
+  "analysis_window_days": 30,
+  "grafana": {
+    "mode": "mock",
+    "mock_data_path": "mock-metrics.json"
+  },
+  "costs": {
+    "source": "csv",
+    "csv_path": "server-costs.csv",
+    "default_currency": "USD",
+    "default_monthly_cost": 0
+  },
+  "reporting": {
+    "output_dir": "../outputs"
+  }
+}

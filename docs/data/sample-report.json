@@ -1,0 +1,84 @@
+{
+  "generated_at": "2026-03-19T11:50:39.947383+00:00",
+  "analysis_window": {
+    "start": "2026-02-17T11:50:39.946871+00:00",
+    "end": "2026-03-19T11:50:39.946871+00:00",
+    "days": 30
+  },
+  "threshold_percent": 40.0,
+  "summary": {
+    "servers_analyzed": 3,
+    "underutilized_servers": 2,
+    "healthy_servers": 1,
+    "potential_monthly_savings_by_currency": {
+      "USD": 430.0
+    },
+    "potential_annual_savings_by_currency": {
+      "USD": 5160.0
+    }
+  },
+  "servers": [
+    {
+      "server_id": "app-server-01",
+      "analysis_window_days": 30,
+      "avg_cpu": 22.5,
+      "avg_memory": 31.0,
+      "utilization_score": 31.0,
+      "status": "Underutilized",
+      "monthly_cost": 180.0,
+      "annual_cost": 2160.0,
+      "monthly_savings_if_removed": 180.0,
+      "annual_savings_if_removed": 2160.0,
+      "currency": "USD",
+      "recommendation": "Review for removal or consolidation",
+      "rationale": "app-server-01 averaged 31.0% utilization over the last 30 days, which is below the 40.0% threshold. If it can be safely removed or consolidated, the organization could avoid about USD 180.00 per month and USD 2,160.00 per year.",
+      "caveats": [
+        "Average utilization may hide short peak demand windows.",
+        "The server may still support standby, failover, or critical workloads.",
+        "Confirm dependencies with application owners before removing the server."
+      ]
+    },
+    {
+      "server_id": "batch-server-03",
+      "analysis_window_days": 30,
+      "avg_cpu": 18.833333333333332,
+      "avg_memory": 28.833333333333332,
+      "utilization_score": 28.833333333333332,
+      "status": "Underutilized",
+      "monthly_cost": 250.0,
+      "annual_cost": 3000.0,
+      "monthly_savings_if_removed": 250.0,
+      "annual_savings_if_removed": 3000.0,
+      "currency": "USD",
+      "recommendation": "Review for removal or consolidation",
+      "rationale": "batch-server-03 averaged 28.8% utilization over the last 30 days, which is below the 40.0% threshold. If it can be safely removed or consolidated, the organization could avoid about USD 250.00 per month and USD 3,000.00 per year.",
+      "caveats": [
+        "Average utilization may hide short peak demand windows.",
+        "The server may still support standby, failover, or critical workloads.",
+        "Confirm dependencies with application owners before removing the server."
+      ]
+    },
+    {
+      "server_id": "app-server-02",
+      "analysis_window_days": 30,
+      "avg_cpu": 50.5,
+      "avg_memory": 44.833333333333336,
+      "utilization_score": 50.5,
+      "status": "Healthy",
+      "monthly_cost": 180.0,
+      "annual_cost": 2160.0,
+      "monthly_savings_if_removed": 0.0,
+      "annual_savings_if_removed": 0.0,
+      "currency": "USD",
+      "recommendation": "Keep in service",
+      "rationale": "app-server-02 is operating above the 40.0% threshold with a 50.5% utilization score over the last 30 days.",
+      "caveats": [
+        "Average utilization may hide short peak demand windows.",
+        "The server may still support standby, failover, or critical workloads.",
+        "Confirm dependencies with application owners before removing the server."
+      ]
+    }
+  ],
+  "missing_servers": [],
+  "warnings": []
+}

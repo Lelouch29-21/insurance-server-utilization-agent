@@ -1,0 +1,36 @@
+{
+  "threshold_percent": 40,
+  "analysis_window_days": 30,
+  "grafana": {
+    "mode": "grafana_prometheus",
+    "base_url": "https://grafana.example.com",
+    "api_token_env": "GRAFANA_API_TOKEN",
+    "datasource_uid": "prometheus",
+    "datasource_type": "prometheus",
+    "metric_queries": {
+      "cpu": {
+        "ref_id": "A",
+        "expr_template": "100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\", instance=~\"${server}(:.*)?\"}[5m])))",
+        "legend_format": "${server}",
+        "interval_ms": 300000,
+        "max_data_points": 720
+      },
+      "memory": {
+        "ref_id": "B",
+        "expr_template": "100 * (1 - (node_memory_MemAvailable_bytes{instance=~\"${server}(:.*)?\"} / node_memory_MemTotal_bytes{instance=~\"${server}(:.*)?\"}))",
+        "legend_format": "${server}",
+        "interval_ms": 300000,
+        "max_data_points": 720
+      }
+    }
+  },
+  "costs": {
+    "source": "csv",
+    "csv_path": "server-costs.csv",
+    "default_currency": "USD",
+    "default_monthly_cost": 0
+  },
+  "reporting": {
+    "output_dir": "../outputs"
+  }
+}
