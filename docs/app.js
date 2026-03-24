@@ -1,1231 +1,404 @@
-const SOURCE_DEFINITIONS = [
-  {
-    id: "amazon-in",
-    label: "Amazon India",
-    market: "domestic",
-    marketLabel: "India",
-    currency: "INR",
-    maxResults: 6,
-    buildSearchUrl(query) {
-      return `https://www.amazon.in/s?k=${encodeURIComponent(query).replace(
-        /%20/g,
-        "+"
-      )}`;
-    },
-    parser: parseAmazonMarkdown,
-  },
-  {
-    id: "croma",
-    label: "Croma",
-    market: "domestic",
-    marketLabel: "India",
-    currency: "INR",
-    maxResults: 6,
-    buildSearchUrl(query) {
-      return `https://www.croma.com/searchB?q=${encodeURIComponent(
-        `${query}:relevance`
-      )}`;
-    },
-    parser: parseCromaMarkdown,
-  },
-  {
-    id: "ebay",
-    label: "eBay",
-    market: "import",
-    marketLabel: "Global",
-    currency: "USD",
-    maxResults: 6,
-    buildSearchUrl(query) {
-      return `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(query).replace(
-        /%20/g,
-        "+"
-      )}`;
-    },
-    parser: parseEbayMarkdown,
-  },
-  {
-    id: "aliexpress",
-    label: "AliExpress",
-    market: "import",
-    marketLabel: "Global",
-    currency: "USD",
-    maxResults: 6,
-    buildSearchUrl(query) {
-      return `https://www.aliexpress.com/wholesale?SearchText=${encodeURIComponent(
-        query
-      ).replace(/%20/g, "+")}`;
-    },
-    parser: parseAliExpressMarkdown,
-  },
-];
-
-const STORAGE_KEYS = {
-  theme: "landed-in-india-theme",
-  settings: "landed-in-india-settings",
-  savedOffers: "landed-in-india-saved-offers",
-  history: "landed-in-india-search-history",
-  lastRun: "landed-in-india-last-run",
-  exchangeRates: "landed-in-india-exchange-rates",
-};
-
-const IMPORT_MODE_DETAILS = {
-  personal: {
-    label: "Personal buy",
-    rate: 42.08,
-    formula:
-      "Personal import estimate: assessable value plus 42.08% duty, then any courier handling fee.",
-  },
-  gift: {
-    label: "Gift import",
-    rate: 77.28,
-    formula:
-      "Gift estimate: assessable value plus 77.28% duty, then any courier handling fee.",
-  },
-  custom: {
-    label: "Custom rate",
-    rate: null,
-    formula:
-      "Custom mode uses your own duty percentage on the assessable value, then adds any courier handling fee.",
-  },
-};
-
-const DEFAULT_SETTINGS = {
-  enabledSources: SOURCE_DEFINITIONS.map((source) => source.id),
-  dutyMode: "personal",
-  customDutyRate: 42.08,
-  shippingBufferPercent: 8,
-  insurancePercent: 0,
-  handlingFeeInr: 0,
-};
-
-const DEFAULT_EXCHANGE_RATES = {
-  USD: 93.85,
-};
+const SAMPLE_REPORT_PATH = "./data/sample-report.json";
 
 const state = {
-  query: "",
-  results: [],
+  report: null,
   filter: "all",
-  sort: "landed",
-  searching: false,
-  errors: [],
-  savedOffers: [],
-  history: [],
-  lastRun: null,
-  theme: "light",
-  settings: { ...DEFAULT_SETTINGS },
-  exchangeRates: { ...DEFAULT_EXCHANGE_RATES },
-  ratesUpdatedAt: null,
-  sourceStatuses: Object.fromEntries(
-    SOURCE_DEFINITIONS.map((source) => [source.id, { state: "idle", detail: "" }])
-  ),
+  search: "",
+  dataSourceMessage: "",
+  supportsDateFiltering: false,
+  availableStartDate: "",
+  availableEndDate: "",
+  selectedStartDate: "",
+  selectedEndDate: "",
 };
 
 const elements = {
-  themeToggle: document.querySelector("#theme-toggle"),
-  themeModeLabel: document.querySelector("#theme-mode-label"),
-  searchForm: document.querySelector("#search-form"),
+  loadSampleButton: document.querySelector("#load-sample-button"),
+  uploadInput: document.querySelector("#report-upload"),
+  startDateInput: document.querySelector("#start-date-input"),
+  endDateInput: document.querySelector("#end-date-input"),
+  resetDatesButton: document.querySelector("#reset-dates-button"),
+  dataSourceNote: document.querySelector("#data-source-note"),
+  dateRangeNote: document.querySelector("#date-range-note"),
+  thresholdValue: document.querySelector("#threshold-value"),
+  windowDays: document.querySelector("#window-days"),
+  generatedAt: document.querySelector("#generated-at"),
+  underutilizedCount: document.querySelector("#underutilized-count"),
+  healthyCount: document.querySelector("#healthy-count"),
+  monthlySavings: document.querySelector("#monthly-savings"),
+  annualSavings: document.querySelector("#annual-savings"),
+  distributionUnderutilized: document.querySelector("#distribution-underutilized"),
+  distributionHealthy: document.querySelector("#distribution-healthy"),
+  insightStrip: document.querySelector("#insight-strip"),
   searchInput: document.querySelector("#search-input"),
-  searchButton: document.querySelector("#search-button"),
-  sourceNote: document.querySelector("#source-note"),
-  lastUpdated: document.querySelector("#last-updated"),
-  sourceToggleList: document.querySelector("#source-toggle-list"),
-  savedCountBadge: document.querySelector("#saved-count-badge"),
-  fxRateDisplay: document.querySelector("#fx-rate-display"),
-  importModeBadge: document.querySelector("#import-mode-badge"),
-  offersCount: document.querySelector("#offers-count"),
-  bestDomestic: document.querySelector("#best-domestic"),
-  bestImport: document.querySelector("#best-import"),
-  bestOverall: document.querySelector("#best-overall"),
-  resultCountNote: document.querySelector("#result-count-note"),
-  spotlightGrid: document.querySelector("#spotlight-grid"),
-  restoreLastButton: document.querySelector("#restore-last-button"),
-  refreshFxButton: document.querySelector("#refresh-fx-button"),
-  modeSelect: document.querySelector("#mode-select"),
-  customDutyWrap: document.querySelector("#custom-duty-wrap"),
-  customDutyInput: document.querySelector("#custom-duty-input"),
-  shippingBufferInput: document.querySelector("#shipping-buffer-input"),
-  insuranceInput: document.querySelector("#insurance-input"),
-  handlingFeeInput: document.querySelector("#handling-fee-input"),
-  formulaNote: document.querySelector("#formula-note"),
-  filterGroup: document.querySelector("#filter-group"),
-  sortSelect: document.querySelector("#sort-select"),
-  resultsGrid: document.querySelector("#results-grid"),
-  resultsEmpty: document.querySelector("#results-empty"),
-  savedGrid: document.querySelector("#saved-grid"),
-  historyList: document.querySelector("#history-list"),
-  clearSavedButton: document.querySelector("#clear-saved-button"),
-  clearHistoryButton: document.querySelector("#clear-history-button"),
-  storageSummary: document.querySelector("#storage-summary"),
+  filterButtons: Array.from(document.querySelectorAll(".filter-button")),
+  serverGrid: document.querySelector("#server-grid"),
+  serverTableBody: document.querySelector("#server-table-body"),
+  recommendationsList: document.querySelector("#recommendations-list"),
+  emptyState: document.querySelector("#empty-state"),
+  warningsPanel: document.querySelector("#warnings-panel"),
+  warningsList: document.querySelector("#warnings-list"),
+  missingPanel: document.querySelector("#missing-panel"),
+  missingList: document.querySelector("#missing-list"),
 };
 
-init().catch((error) => {
-  console.error(error);
-});
-
 async function init() {
-  hydrateState();
   attachEventListeners();
-  syncSettingsInputs();
-  renderAll();
-  maybeRefreshExchangeRate();
-}
-
-function hydrateState() {
-  state.settings = {
-    ...DEFAULT_SETTINGS,
-    ...readStorage(STORAGE_KEYS.settings, DEFAULT_SETTINGS),
-  };
-  state.savedOffers = readStorage(STORAGE_KEYS.savedOffers, []);
-  state.history = readStorage(STORAGE_KEYS.history, []);
-  state.lastRun = readStorage(STORAGE_KEYS.lastRun, null);
-
-  const exchangePayload = readStorage(STORAGE_KEYS.exchangeRates, null);
-  if (exchangePayload?.rates) {
-    state.exchangeRates = {
-      ...DEFAULT_EXCHANGE_RATES,
-      ...exchangePayload.rates,
-    };
-    state.ratesUpdatedAt = exchangePayload.updatedAt ?? null;
-  }
-
-  const storedTheme = localStorage.getItem(STORAGE_KEYS.theme);
-  state.theme = storedTheme || getSystemTheme();
-  document.body.dataset.theme = state.theme;
-
-  if (state.lastRun?.results?.length) {
-    state.query = state.lastRun.query ?? "";
-    state.results = decorateOffers(state.lastRun.results);
-  }
-
-  if (state.query) {
-    elements.searchInput.value = state.query;
-  }
+  await loadSampleReport();
 }
 
 function attachEventListeners() {
-  elements.themeToggle.addEventListener("click", toggleTheme);
-  elements.restoreLastButton.addEventListener("click", restoreLastRun);
-  elements.refreshFxButton.addEventListener("click", () =>
-    refreshExchangeRate({ force: true, announce: true })
-  );
-
-  elements.searchForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const query = elements.searchInput.value.trim();
-    if (!query) {
-      elements.searchInput.focus();
-      return;
-    }
-    await performSearch(query);
+  elements.loadSampleButton.addEventListener("click", () => {
+    loadSampleReport().catch((error) => showLoadError(error.message));
   });
 
-  document.querySelectorAll("[data-quick-query]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      const query = button.dataset.quickQuery ?? "";
-      elements.searchInput.value = query;
-      await performSearch(query);
+  elements.uploadInput.addEventListener("change", async (event) => {
+    const [file] = event.target.files ?? [];
+    if (!file) {
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      applyReport(parsed, `Loaded report from ${file.name}.`);
+    } catch (error) {
+      showLoadError(`Unable to read ${file.name}: ${error.message}`);
+    } finally {
+      event.target.value = "";
+    }
+  });
+
+  const handleDateChange = () => {
+    if (!state.supportsDateFiltering) {
+      return;
+    }
+
+    const normalized = normalizeDateWindow(
+      elements.startDateInput.value || state.availableStartDate,
+      elements.endDateInput.value || state.availableEndDate,
+      state.availableStartDate,
+      state.availableEndDate
+    );
+    state.selectedStartDate = normalized.start;
+    state.selectedEndDate = normalized.end;
+    syncDateInputs();
+    render();
+  };
+
+  elements.startDateInput.addEventListener("change", handleDateChange);
+  elements.endDateInput.addEventListener("change", handleDateChange);
+
+  elements.resetDatesButton.addEventListener("click", () => {
+    if (!state.supportsDateFiltering) {
+      return;
+    }
+    state.selectedStartDate = state.availableStartDate;
+    state.selectedEndDate = state.availableEndDate;
+    syncDateInputs();
+    render();
+  });
+
+  elements.searchInput.addEventListener("input", (event) => {
+    state.search = event.target.value.trim().toLowerCase();
+    render();
+  });
+
+  elements.filterButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.filter = button.dataset.filter;
+      elements.filterButtons.forEach((item) =>
+        item.classList.toggle("active", item === button)
+      );
+      render();
     });
   });
-
-  elements.sourceToggleList.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-source-id]");
-    if (!button) {
-      return;
-    }
-    toggleSource(button.dataset.sourceId);
-  });
-
-  elements.filterGroup.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-filter]");
-    if (!button) {
-      return;
-    }
-    state.filter = button.dataset.filter;
-    renderResults();
-    syncFilterButtons();
-    renderHeaderMeta();
-  });
-
-  elements.sortSelect.addEventListener("change", (event) => {
-    state.sort = event.target.value;
-    renderResults();
-  });
-
-  elements.modeSelect.addEventListener("change", () => {
-    state.settings.dutyMode = elements.modeSelect.value;
-    persistSettings();
-    syncSettingsInputs();
-    rerateStoredOffers();
-  });
-
-  elements.customDutyInput.addEventListener("input", () => {
-    state.settings.customDutyRate = clampNumber(
-      elements.customDutyInput.value,
-      0,
-      200,
-      DEFAULT_SETTINGS.customDutyRate
-    );
-    persistSettings();
-    rerateStoredOffers();
-  });
-
-  elements.shippingBufferInput.addEventListener("input", () => {
-    state.settings.shippingBufferPercent = clampNumber(
-      elements.shippingBufferInput.value,
-      0,
-      100,
-      DEFAULT_SETTINGS.shippingBufferPercent
-    );
-    persistSettings();
-    rerateStoredOffers();
-  });
-
-  elements.insuranceInput.addEventListener("input", () => {
-    state.settings.insurancePercent = clampNumber(
-      elements.insuranceInput.value,
-      0,
-      20,
-      DEFAULT_SETTINGS.insurancePercent
-    );
-    persistSettings();
-    rerateStoredOffers();
-  });
-
-  elements.handlingFeeInput.addEventListener("input", () => {
-    state.settings.handlingFeeInr = clampNumber(
-      elements.handlingFeeInput.value,
-      0,
-      5000,
-      DEFAULT_SETTINGS.handlingFeeInr
-    );
-    persistSettings();
-    rerateStoredOffers();
-  });
-
-  elements.resultsGrid.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-save-offer]");
-    if (!button) {
-      return;
-    }
-    toggleSaveOffer(button.dataset.saveOffer);
-  });
-
-  elements.savedGrid.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-remove-offer]");
-    if (button) {
-      toggleSaveOffer(button.dataset.removeOffer);
-    }
-  });
-
-  elements.historyList.addEventListener("click", async (event) => {
-    const button = event.target.closest("[data-history-query]");
-    if (!button) {
-      return;
-    }
-    const query = button.dataset.historyQuery ?? "";
-    elements.searchInput.value = query;
-    await performSearch(query);
-  });
-
-  elements.clearSavedButton.addEventListener("click", () => {
-    state.savedOffers = [];
-    persistSavedOffers();
-    renderSaved();
-    renderStorageSummary();
-    renderHeaderMeta();
-  });
-
-  elements.clearHistoryButton.addEventListener("click", () => {
-    state.history = [];
-    persistHistory();
-    renderHistory();
-    renderStorageSummary();
-  });
-
-  window.matchMedia("(prefers-color-scheme: dark)").addEventListener(
-    "change",
-    () => {
-      if (!localStorage.getItem(STORAGE_KEYS.theme)) {
-        state.theme = getSystemTheme();
-        document.body.dataset.theme = state.theme;
-        renderHeaderMeta();
-      }
-    }
-  );
 }
 
-async function performSearch(query) {
-  const trimmedQuery = query.trim();
-  if (!trimmedQuery) {
+async function loadSampleReport() {
+  const response = await fetch(SAMPLE_REPORT_PATH);
+  if (!response.ok) {
+    throw new Error(`Sample report request failed with HTTP ${response.status}`);
+  }
+
+  const payload = await response.json();
+  applyReport(payload, "Showing bundled sample data from the generated MVP report.");
+}
+
+function applyReport(report, message) {
+  validateReport(report);
+  state.report = report;
+  state.dataSourceMessage = message;
+  state.supportsDateFiltering = hasServerMetricSeries(report);
+
+  const availableWindow = getAvailableDateWindow(report);
+  state.availableStartDate = availableWindow.start;
+  state.availableEndDate = availableWindow.end;
+  state.selectedStartDate = availableWindow.start;
+  state.selectedEndDate = availableWindow.end;
+
+  syncDateInputs();
+  elements.dataSourceNote.textContent = message;
+  render();
+}
+
+function validateReport(report) {
+  if (!report || typeof report !== "object") {
+    throw new Error("Report payload must be a JSON object.");
+  }
+  if (!Array.isArray(report.servers)) {
+    throw new Error("Report payload is missing a servers array.");
+  }
+}
+
+function render() {
+  if (!state.report) {
     return;
   }
 
-  state.query = trimmedQuery;
-  state.searching = true;
-  state.errors = [];
-  resetSourceStatuses();
-  renderAll();
-
-  if (hasActiveImportSource()) {
-    await maybeRefreshExchangeRate({ silent: true });
-  }
-
-  const activeSources = getActiveSources();
-  const searchTasks = activeSources.map((source) => searchSource(source, trimmedQuery));
-  const taskResults = await Promise.all(searchTasks);
-
-  const merged = dedupeOffers(taskResults.flat());
-  state.results = decorateOffers(merged);
-  state.searching = false;
-
-  updateHistory(trimmedQuery, state.results.length);
-  persistLastRun();
-  renderAll();
-}
-
-async function searchSource(source, query) {
-  setSourceStatus(source.id, "loading", "Scanning");
-  try {
-    const rawText = await fetchSourceText(source, query);
-    const parsed = source.parser(rawText, query)
-      .map((offer) => ({
-        ...offer,
-        sourceId: source.id,
-        sourceLabel: source.label,
-        market: source.market,
-        marketLabel: source.marketLabel,
-        currency: offer.currency || source.currency,
-      }))
-      .filter((offer) => Number.isFinite(offer.price) && offer.price > 0);
-
-    const ranked = rankOffersForQuery(parsed, query).slice(0, source.maxResults);
-    setSourceStatus(source.id, "success", `${ranked.length} offers`);
-    return ranked;
-  } catch (error) {
-    setSourceStatus(source.id, "error", error.message);
-    state.errors.push(`${source.label}: ${error.message}`);
-    return [];
-  }
-}
-
-async function fetchSourceText(source, query) {
-  const proxyUrl = buildProxyReaderUrl(source.buildSearchUrl(query));
-  const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), 18000);
-
-  try {
-    const response = await fetch(proxyUrl, {
-      signal: controller.signal,
-      headers: {
-        Accept: "text/plain",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const text = await response.text();
-    if (!text || text.length < 80) {
-      throw new Error("No readable results");
-    }
-    if (/Bad Request|Too Many Requests|AuthenticationRequiredError/i.test(text)) {
-      throw new Error("Source blocked or unavailable");
-    }
-
-    return text;
-  } catch (error) {
-    if (error.name === "AbortError") {
-      throw new Error("Timed out");
-    }
-    throw error;
-  } finally {
-    window.clearTimeout(timer);
-  }
-}
-
-function buildProxyReaderUrl(targetUrl) {
-  const normalizedUrl = targetUrl.replace(/^https?:\/\//, "");
-  const readerUrl = `https://r.jina.ai/http://${normalizedUrl}`;
-  return `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(
-    readerUrl
-  )}`;
-}
-
-function parseAmazonMarkdown(text) {
-  const offers = [];
-  const lines = text.split(/\r?\n/);
-  let pending = null;
-  let recentImage = "";
-
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line) {
-      continue;
-    }
-
-    const imageMatch = line.match(
-      /\[\!\[Image \d+: [^\]]+\]\((https?:\/\/[^)]+)\)\]\((https?:\/\/www\.amazon\.in\/[^)]+)\)/
-    );
-    if (imageMatch) {
-      recentImage = imageMatch[1];
-    }
-
-    const titleMatch = line.match(
-      /\[\#\# ([^\]]+)\]\((https?:\/\/www\.amazon\.in\/[^)]+)\)/
-    );
-    if (titleMatch) {
-      pending = {
-        title: cleanTitle(titleMatch[1]),
-        url: titleMatch[2],
-        image: recentImage || "",
-      };
-      continue;
-    }
-
-    const priceMatch = line.match(/Price, product page\[₹([\d,]+(?:\.\d+)?)/);
-    if (priceMatch && pending) {
-      offers.push({
-        ...pending,
-        price: parseNumericPrice(priceMatch[1]),
-      });
-      pending = null;
-      recentImage = "";
-    }
-  }
-
-  return offers;
-}
-
-function parseCromaMarkdown(text) {
-  const offers = [];
-  const regex =
-    /\[!\[Image \d+: ([^\]]+)\]\((https?:\/\/[^)]+)\)\]\((https:\/\/www\.croma\.com\/[^)]+)\)Compare\s+₹([\d,]+(?:\.\d+)?)/g;
-
-  for (const match of text.matchAll(regex)) {
-    offers.push({
-      title: cleanTitle(match[1]),
-      image: match[2],
-      url: match[3],
-      price: parseNumericPrice(match[4]),
-    });
-  }
-
-  return offers;
-}
-
-function parseEbayMarkdown(text) {
-  const offers = [];
-  const lines = text.split(/\r?\n/);
-
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line.includes("ebay.com/itm/") || !line.includes("Opens in a new window or tab")) {
-      continue;
-    }
-
-    const titleMatch = line.match(
-      /\[([^\]]+?) Opens in a new window or tab\]\((https:\/\/www\.ebay\.com\/itm\/[^)]+)\)/
-    );
-    const priceMatch = line.match(
-      /(?:Brand New|Open Box|Pre-Owned|Used|Seller refurbished|Excellent - Refurbished|Good - Refurbished)?\s*\$([\d,.]+)/
-    );
-
-    if (!titleMatch || !priceMatch) {
-      continue;
-    }
-
-    const imageMatch = line.match(
-      /!\[Image \d+: [^\]]+\]\((https?:\/\/[^)]+)\)\]\((https:\/\/www\.ebay\.com\/itm\/[^)]+)\)/
-    );
-
-    offers.push({
-      title: cleanTitle(titleMatch[1]),
-      url: titleMatch[2],
-      image: imageMatch?.[1] ?? "",
-      price: parseNumericPrice(priceMatch[1]),
-      note: /Free delivery/i.test(line) ? "Free delivery shown" : "",
-    });
-  }
-
-  return offers;
-}
-
-function parseAliExpressMarkdown(text) {
-  const offers = [];
-  const lines = text.split(/\r?\n/);
-
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line.includes("### ") || !line.includes("aliexpress") || !line.includes("$")) {
-      continue;
-    }
-
-    const titleMatch = line.match(/### (.+?) \$([\d,.]+)/);
-    if (!titleMatch) {
-      continue;
-    }
-
-    const urlMatches = [...line.matchAll(/\]\((https:\/\/www\.aliexpress\.[^)]+)\)/g)];
-    const url = urlMatches.at(-1)?.[1];
-    if (!url) {
-      continue;
-    }
-
-    const imageMatch = line.match(/!\[Image \d+: [^\]]+\]\((https?:\/\/[^)]+)\)/);
-    offers.push({
-      title: cleanTitle(titleMatch[1]),
-      url,
-      image: imageMatch?.[1] ?? "",
-      price: parseNumericPrice(titleMatch[2]),
-    });
-  }
-
-  return offers;
-}
-
-function rankOffersForQuery(offers, query) {
-  const normalizedQuery = normalizeForMatch(query);
-  const queryTokens = normalizedQuery.split(" ").filter(Boolean);
-  const withScore = offers.map((offer) => ({
-    ...offer,
-    relevanceScore: computeRelevanceScore(offer.title, normalizedQuery, queryTokens),
-  }));
-
-  const strictMatches = withScore.filter((offer) =>
-    normalizeForMatch(offer.title).includes(normalizedQuery)
-  );
-
-  const pool =
-    normalizedQuery.includes(" ") && strictMatches.length >= 2
-      ? strictMatches
-      : withScore.filter((offer) => offer.relevanceScore >= 0.45);
-
-  return pool.sort((left, right) => {
-    if (right.relevanceScore !== left.relevanceScore) {
-      return right.relevanceScore - left.relevanceScore;
-    }
-    return left.price - right.price;
+  const view = buildViewModel(state.report);
+  const visibleServers = view.servers.filter((server) => {
+    const matchesFilter =
+      state.filter === "all" || server.status.toLowerCase() === state.filter;
+    const matchesSearch =
+      !state.search || server.server_id.toLowerCase().includes(state.search);
+    return matchesFilter && matchesSearch;
   });
+
+  renderDateNotes(view);
+  renderSummary(view);
+  renderServers(visibleServers);
+  renderRecommendations(visibleServers);
+  renderWarnings(view.warnings);
+  renderMissing(state.report.missing_servers ?? []);
 }
 
-function computeRelevanceScore(title, normalizedQuery, queryTokens) {
-  const normalizedTitle = normalizeForMatch(title);
-  if (!normalizedTitle) {
-    return 0;
+function buildViewModel(report) {
+  const threshold = Number(report.threshold_percent ?? 40);
+  const warnings = [...(report.warnings ?? [])];
+
+  if (!state.supportsDateFiltering) {
+    const servers = report.servers ?? [];
+    return {
+      servers,
+      summary: computeSummary(servers),
+      warnings,
+      windowDays:
+        report.analysis_window?.days ??
+        inclusiveDayDifference(
+          state.availableStartDate,
+          state.availableEndDate
+        ),
+    };
   }
 
-  if (normalizedQuery && normalizedTitle.includes(normalizedQuery)) {
-    return 2;
+  const metricsIndex = new Map(
+    (report.server_metrics ?? []).map((entry) => [entry.server_id, entry.metrics])
+  );
+  const derivedServers = [];
+  for (const server of report.servers ?? []) {
+    const recalculated = deriveServerForWindow(
+      server,
+      metricsIndex.get(server.server_id),
+      threshold,
+      state.selectedStartDate,
+      state.selectedEndDate
+    );
+    if (!recalculated) {
+      warnings.push(
+        `No metric samples were available for ${server.server_id} in the selected date window.`
+      );
+      continue;
+    }
+    derivedServers.push(recalculated);
   }
-
-  if (queryTokens.length === 0) {
-    return 0;
-  }
-
-  const titleTokens = new Set(normalizedTitle.split(" ").filter(Boolean));
-  const matchedTokens = queryTokens.filter((token) => titleTokens.has(token)).length;
-  return matchedTokens / queryTokens.length;
-}
-
-function decorateOffers(offers) {
-  const repriced = repriceOffers(
-    offers.map((offer) => ({
-      ...offer,
-      id:
-        offer.id ||
-        createOfferId(offer.sourceId, offer.title, offer.price, offer.currency),
-    }))
-  );
-
-  const bestDomestic = getBestOffer(repriced, "domestic");
-  const bestImport = getBestOffer(repriced, "import");
-
-  return [...repriced]
-    .map((offer) => {
-      const reference =
-        offer.market === "import"
-          ? bestDomestic?.landedCostInr ?? null
-          : bestImport?.landedCostInr ?? null;
-
-      const deltaInr =
-        reference !== null ? offer.landedCostInr - reference : null;
-
-      return {
-        ...offer,
-        referenceDeltaInr: deltaInr,
-      };
-    })
-    .sort((left, right) => left.landedCostInr - right.landedCostInr);
-}
-
-function repriceOffers(offers) {
-  return offers.map((offer) => applyCostModel(offer));
-}
-
-function applyCostModel(offer) {
-  const basePriceInr = convertToInr(offer.price, offer.currency);
-  const isImport = offer.market === "import";
-  const dutyRate = isImport ? getSelectedDutyRate() : 0;
-  const shippingBufferInr = isImport
-    ? roundMoney(basePriceInr * (state.settings.shippingBufferPercent / 100))
-    : 0;
-  const insuranceInr = isImport
-    ? roundMoney(basePriceInr * (state.settings.insurancePercent / 100))
-    : 0;
-  const handlingFeeInr = isImport ? state.settings.handlingFeeInr : 0;
-  const assessableValueInr = roundMoney(
-    basePriceInr + shippingBufferInr + insuranceInr
-  );
-
-  // The landed-cost model uses a flat duty estimate on the assessable value.
-  const dutyInr = isImport
-    ? roundMoney(assessableValueInr * (dutyRate / 100))
-    : 0;
-
-  const landedCostInr = roundMoney(
-    isImport ? assessableValueInr + dutyInr + handlingFeeInr : basePriceInr
-  );
 
   return {
-    ...offer,
-    price: roundMoney(offer.price),
-    basePriceInr,
-    shippingBufferInr,
-    insuranceInr,
-    handlingFeeInr,
-    assessableValueInr,
-    dutyRate,
-    dutyInr,
-    landedCostInr,
-    listedLabel: formatMoney(offer.price, offer.currency),
-    landedLabel: formatMoney(landedCostInr, "INR"),
+    servers: derivedServers,
+    summary: computeSummary(derivedServers),
+    warnings: uniqueStrings(warnings),
+    windowDays: inclusiveDayDifference(
+      state.selectedStartDate,
+      state.selectedEndDate
+    ),
   };
 }
 
-function getSelectedDutyRate() {
-  const mode = state.settings.dutyMode;
-  if (mode === "custom") {
-    return clampNumber(
-      state.settings.customDutyRate,
-      0,
-      200,
-      DEFAULT_SETTINGS.customDutyRate
-    );
-  }
-  return IMPORT_MODE_DETAILS[mode]?.rate ?? IMPORT_MODE_DETAILS.personal.rate;
-}
-
-function convertToInr(amount, currency) {
-  if (currency === "INR") {
-    return roundMoney(amount);
-  }
-
-  const rate = state.exchangeRates[currency];
-  if (!rate) {
-    return roundMoney(amount);
-  }
-
-  return roundMoney(amount * rate);
-}
-
-async function maybeRefreshExchangeRate(options = {}) {
-  const updatedAt = state.ratesUpdatedAt ? new Date(state.ratesUpdatedAt).getTime() : 0;
-  const isStale = Date.now() - updatedAt > 1000 * 60 * 60 * 12;
-  if (!options.force && updatedAt && !isStale) {
-    renderHeaderMeta();
-    return;
-  }
-  await refreshExchangeRate(options);
-}
-
-async function refreshExchangeRate({ force = false, announce = false, silent = false } = {}) {
-  if (!force && !hasActiveImportSource()) {
-    return;
-  }
-
-  try {
-    const response = await fetch("https://api.frankfurter.app/latest?from=USD&to=INR");
-    if (!response.ok) {
-      throw new Error(`FX HTTP ${response.status}`);
-    }
-    const payload = await response.json();
-    if (!payload?.rates?.INR) {
-      throw new Error("FX payload missing INR");
-    }
-
-    state.exchangeRates.USD = Number(payload.rates.INR);
-    state.ratesUpdatedAt = new Date().toISOString();
-    localStorage.setItem(
-      STORAGE_KEYS.exchangeRates,
-      JSON.stringify({
-        rates: state.exchangeRates,
-        updatedAt: state.ratesUpdatedAt,
-      })
-    );
-
-    rerateStoredOffers({ preserveRender: true });
-    if (announce && !silent) {
-      elements.lastUpdated.textContent = `FX updated just now. Last rate: ${formatFxLine()}.`;
-    }
-  } catch (error) {
-    console.warn(error);
-    if (!silent) {
-      elements.lastUpdated.textContent =
-        "FX refresh failed, so the last stored INR conversion is still in use.";
-    }
-  }
-}
-
-function rerateStoredOffers({ preserveRender = false } = {}) {
-  state.results = decorateOffers(state.results);
-  state.savedOffers = repriceOffers(state.savedOffers);
-  persistSavedOffers();
-  persistLastRun();
-  if (!preserveRender) {
-    renderAll();
-  } else {
-    renderHeaderMeta();
-    renderSummary();
-    renderSpotlights();
-    renderResults();
-    renderSaved();
-    renderStorageSummary();
-  }
-}
-
-function restoreLastRun() {
-  if (!state.lastRun?.results?.length) {
-    elements.lastUpdated.textContent = "No previous scan is stored in this browser yet.";
-    return;
-  }
-
-  state.query = state.lastRun.query ?? "";
-  state.results = decorateOffers(state.lastRun.results);
-  elements.searchInput.value = state.query;
-  renderAll();
-}
-
-function toggleTheme() {
-  state.theme = state.theme === "dark" ? "light" : "dark";
-  document.body.dataset.theme = state.theme;
-  localStorage.setItem(STORAGE_KEYS.theme, state.theme);
-  renderHeaderMeta();
-}
-
-function toggleSource(sourceId) {
-  const enabled = new Set(state.settings.enabledSources);
-  if (enabled.has(sourceId) && enabled.size > 1) {
-    enabled.delete(sourceId);
-  } else {
-    enabled.add(sourceId);
-  }
-  state.settings.enabledSources = SOURCE_DEFINITIONS.filter((source) =>
-    enabled.has(source.id)
-  ).map((source) => source.id);
-
-  persistSettings();
-  resetSourceStatuses();
-  renderSourceChips();
-  renderHeaderMeta();
-}
-
-function toggleSaveOffer(offerId) {
-  const existingIndex = state.savedOffers.findIndex((offer) => offer.id === offerId);
-  if (existingIndex >= 0) {
-    state.savedOffers.splice(existingIndex, 1);
-  } else {
-    const currentOffer =
-      state.results.find((offer) => offer.id === offerId) ||
-      state.savedOffers.find((offer) => offer.id === offerId);
-
-    if (currentOffer) {
-      state.savedOffers.unshift({ ...currentOffer });
-      state.savedOffers = state.savedOffers.slice(0, 24);
-    }
-  }
-
-  persistSavedOffers();
-  renderSaved();
-  renderResults();
-  renderStorageSummary();
-  renderHeaderMeta();
-}
-
-function updateHistory(query, resultCount) {
-  const now = new Date().toISOString();
-  state.history = [
-    { query, resultCount, searchedAt: now },
-    ...state.history.filter((item) => item.query.toLowerCase() !== query.toLowerCase()),
-  ].slice(0, 12);
-  persistHistory();
-}
-
-function renderAll() {
-  syncFilterButtons();
-  renderSourceChips();
-  renderHeaderMeta();
-  renderSummary();
-  renderSpotlights();
-  renderResults();
-  renderSaved();
-  renderHistory();
-  renderStorageSummary();
-}
-
-function renderHeaderMeta() {
-  const activeSources = getActiveSources();
-  const errorCount = Object.values(state.sourceStatuses).filter(
-    (status) => status.state === "error"
-  ).length;
-
-  const lastScanText = state.searching
-    ? `Scanning ${activeSources.length} sources for "${state.query}"...`
-    : state.lastRun?.searchedAt
-      ? `Last scan ${formatDateTime(state.lastRun.searchedAt)}. Saved data lives only in this browser.`
-      : "No scan yet. Your saved deals live only in this browser.";
-
-  elements.sourceNote.textContent =
-    errorCount > 0
-      ? `${activeSources.length} live sources active. ${errorCount} source${errorCount > 1 ? "s" : ""} had issues in the last scan.`
-      : `${activeSources.length} live sources active. Domestic and import routes are ranked by final India cost.`;
-  elements.lastUpdated.textContent = lastScanText;
-  elements.savedCountBadge.textContent = String(state.savedOffers.length);
-  elements.fxRateDisplay.textContent = formatFxLine();
-  elements.importModeBadge.textContent =
-    IMPORT_MODE_DETAILS[state.settings.dutyMode]?.label ?? "Personal buy";
-  elements.themeModeLabel.textContent =
-    state.theme.charAt(0).toUpperCase() + state.theme.slice(1);
-  elements.themeToggle.textContent =
-    state.theme === "dark" ? "Light mode" : "Dark mode";
-  elements.searchButton.disabled = state.searching;
-  elements.searchButton.textContent = state.searching ? "Scanning..." : "Scan prices";
-  elements.restoreLastButton.disabled =
-    state.searching || !state.lastRun?.results?.length;
-  elements.resultCountNote.textContent = state.searching
-    ? "Live scan in progress..."
-    : state.results.length
-      ? `${getVisibleResults().length} visible of ${state.results.length} total offers.`
-      : "Run a search to see local versus import opportunities.";
-}
-
-function renderSourceChips() {
-  elements.sourceToggleList.innerHTML = SOURCE_DEFINITIONS.map((source) => {
-    const enabled = state.settings.enabledSources.includes(source.id);
-    const status = state.sourceStatuses[source.id] ?? { state: "idle", detail: "" };
-    const statusClass = enabled ? `is-${status.state}` : "";
-    const statusText = enabled
-      ? status.detail || (source.market === "import" ? "Import lane" : "Local lane")
-      : "Off";
-
-    return `
-      <button
-        class="source-chip ${enabled ? "active" : ""} ${statusClass}"
-        type="button"
-        data-source-id="${escapeAttribute(source.id)}"
-        aria-pressed="${enabled ? "true" : "false"}"
-      >
-        <div class="source-pill">
-          <span class="status-dot" aria-hidden="true"></span>
-          ${escapeHtml(source.marketLabel)}
-        </div>
-        <strong>${escapeHtml(source.label)}</strong>
-        <span>${escapeHtml(statusText)}</span>
-      </button>
-    `;
-  }).join("");
-}
-
-function renderSummary() {
-  const bestDomestic = getBestOffer(state.results, "domestic");
-  const bestImport = getBestOffer(state.results, "import");
-  const bestOverall = getBestOffer(state.results, "all");
-
-  elements.offersCount.textContent = String(state.results.length);
-  elements.bestDomestic.textContent = bestDomestic
-    ? formatMoney(bestDomestic.landedCostInr, "INR")
-    : "-";
-  elements.bestImport.textContent = bestImport
-    ? formatMoney(bestImport.landedCostInr, "INR")
-    : "-";
-  elements.bestOverall.textContent = bestOverall
-    ? formatMoney(bestOverall.landedCostInr, "INR")
-    : "-";
-}
-
-function renderSpotlights() {
-  const bestDomestic = getBestOffer(state.results, "domestic");
-  const bestImport = getBestOffer(state.results, "import");
-  const bestOverall = getBestOffer(state.results, "all");
-
-  if (!state.results.length && !state.searching) {
-    elements.spotlightGrid.innerHTML = [
-      {
-        title: "Best India route",
-        body: "Local stores will show up here once a product scan finishes.",
-      },
-      {
-        title: "Best import route",
-        body: "Imported offers get an India landed-cost estimate before ranking.",
-      },
-      {
-        title: "Overall winner",
-        body: "The cheapest final route in INR becomes your top pick here.",
-      },
-    ]
-      .map(
-        (card) => `
-          <article class="spotlight-card">
-            <div class="callout-stack">
-              <span class="callout-tag">Waiting</span>
-              <h3>${escapeHtml(card.title)}</h3>
-              <p>${escapeHtml(card.body)}</p>
-            </div>
-          </article>
-        `
-      )
-      .join("");
-    return;
-  }
-
-  elements.spotlightGrid.innerHTML = [
-    buildSpotlightCard("Best India route", bestDomestic, "Domestic"),
-    buildSpotlightCard("Best import route", bestImport, "Import"),
-    buildSpotlightCard("Overall winner", bestOverall, "Overall"),
-  ].join("");
-}
-
-function buildSpotlightCard(title, offer, badge) {
-  if (!offer) {
-    return `
-      <article class="spotlight-card">
-        <div class="callout-stack">
-          <span class="callout-tag">${escapeHtml(badge)}</span>
-          <h3>${escapeHtml(title)}</h3>
-          <p>No matching offer yet.</p>
-        </div>
-      </article>
-    `;
-  }
-
-  return `
-    <article class="spotlight-card">
-      <div class="callout-stack">
-        <span class="callout-tag">${escapeHtml(badge)}</span>
-        <h3>${escapeHtml(offer.title)}</h3>
-        <p>${escapeHtml(offer.sourceLabel)} · ${escapeHtml(offer.marketLabel)}</p>
-        <strong class="price-hero">${formatMoney(offer.landedCostInr, "INR")}</strong>
-        <div class="callout-meta">
-          <span class="callout-tag">Listed ${escapeHtml(offer.listedLabel)}</span>
-          ${
-            offer.market === "import"
-              ? `<span class="callout-tag">Duty ${escapeHtml(
-                  offer.dutyRate.toFixed(2)
-                )}%</span>`
-              : `<span class="callout-tag">Domestic checkout</span>`
-          }
-        </div>
-      </div>
-    </article>
-  `;
-}
-
-function renderResults() {
-  if (state.searching) {
-    elements.resultsEmpty.classList.add("hidden");
-    elements.resultsGrid.innerHTML = Array.from({ length: 4 })
-      .map(() => '<article class="loading-card" aria-hidden="true"></article>')
-      .join("");
-    return;
-  }
-
-  const visibleOffers = getVisibleResults();
-  elements.resultsEmpty.classList.toggle("hidden", visibleOffers.length > 0);
-
-  if (!visibleOffers.length) {
-    elements.resultsGrid.innerHTML = "";
-    return;
-  }
-
-  elements.resultsGrid.innerHTML = visibleOffers.map(buildOfferCard).join("");
-}
-
-function buildOfferCard(offer) {
-  const isSaved = state.savedOffers.some((item) => item.id === offer.id);
-  const deltaLine = buildDeltaLine(offer);
-
-  return `
-    <article class="result-card ${escapeAttribute(offer.market)}-card">
-      <div class="result-top">
-        ${buildImageMarkup(offer.image, offer.sourceLabel)}
-        <div class="result-copy">
-          <div class="tag-row">
-            <span class="offer-tag">${escapeHtml(offer.sourceLabel)}</span>
-            <span class="offer-tag">${escapeHtml(offer.marketLabel)}</span>
-            ${
-              offer.note
-                ? `<span class="offer-tag">${escapeHtml(offer.note)}</span>`
-                : ""
-            }
-          </div>
-          <h3 class="result-title">${escapeHtml(offer.title)}</h3>
-          <p>${escapeHtml(deltaLine)}</p>
-        </div>
-      </div>
-
-      <div class="price-strip">
-        <div class="price-box">
-          <span>Listed</span>
-          <strong>${escapeHtml(offer.listedLabel)}</strong>
-        </div>
-        <div class="price-box">
-          <span>Landed in India</span>
-          <strong class="landed-price">${formatMoney(offer.landedCostInr, "INR")}</strong>
-        </div>
-      </div>
-
-      <div class="tag-row">
-        ${
-          offer.market === "import"
-            ? `
-              <span class="offer-tag">Duty ${escapeHtml(offer.dutyRate.toFixed(2))}%</span>
-              <span class="offer-tag">Ship buffer ${escapeHtml(
-                state.settings.shippingBufferPercent.toFixed(1)
-              )}%</span>
-              <span class="offer-tag">FX ${escapeHtml(formatFxLine())}</span>
-            `
-            : `<span class="offer-tag">No import add-on</span>`
-        }
-      </div>
-
-      <div class="offer-actions">
-        <a
-          class="action-link"
-          href="${escapeAttribute(offer.url)}"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Open offer
-        </a>
-        <button
-          class="action-button ${isSaved ? "is-saved" : ""}"
-          type="button"
-          data-save-offer="${escapeAttribute(offer.id)}"
-        >
-          ${isSaved ? "Saved" : "Save deal"}
-        </button>
-      </div>
-    </article>
-  `;
-}
-
-function renderSaved() {
-  if (!state.savedOffers.length) {
-    elements.savedGrid.innerHTML =
-      '<div class="empty-hint">Saved offers appear here. Keep the best local and import options side by side for later.</div>';
-    return;
-  }
-
-  const repriced = repriceOffers(state.savedOffers).sort(
-    (left, right) => left.landedCostInr - right.landedCostInr
+function deriveServerForWindow(
+  server,
+  metrics,
+  threshold,
+  startDate,
+  endDate
+) {
+  const cpuPoints = filterPointsByDate(
+    metrics?.cpu?.points ?? [],
+    startDate,
+    endDate
   );
-  state.savedOffers = repriced;
-  persistSavedOffers();
+  const memoryPoints = filterPointsByDate(
+    metrics?.memory?.points ?? [],
+    startDate,
+    endDate
+  );
 
-  elements.savedGrid.innerHTML = repriced
-    .map(
-      (offer) => `
-        <article class="saved-card">
-          <div class="saved-head">
-            ${buildImageMarkup(offer.image, offer.sourceLabel, true)}
-            <div class="saved-copy">
-              <div class="tag-row">
-                <span class="offer-tag">${escapeHtml(offer.sourceLabel)}</span>
-                <span class="offer-tag">${escapeHtml(offer.marketLabel)}</span>
-              </div>
-              <h3>${escapeHtml(offer.title)}</h3>
-              <p>Saved landed cost: ${formatMoney(offer.landedCostInr, "INR")}</p>
-            </div>
-          </div>
-          <div class="offer-actions">
-            <a
-              class="action-link"
-              href="${escapeAttribute(offer.url)}"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Reopen
-            </a>
-            <button
-              class="action-button is-saved"
-              type="button"
-              data-remove-offer="${escapeAttribute(offer.id)}"
-            >
-              Remove
-            </button>
-          </div>
-        </article>
-      `
-    )
-    .join("");
-}
-
-function renderHistory() {
-  if (!state.history.length) {
-    elements.historyList.innerHTML =
-      '<div class="empty-hint">Searches you run are remembered here so you can rerun them in one tap.</div>';
-    return;
+  if (cpuPoints.length === 0 || memoryPoints.length === 0) {
+    return null;
   }
 
-  elements.historyList.innerHTML = state.history
-    .map(
-      (entry) => `
-        <div class="history-item">
-          <div>
-            <strong>${escapeHtml(entry.query)}</strong>
-            <p>${entry.resultCount} offers · ${formatDateTime(entry.searchedAt)}</p>
-          </div>
-          <button
-            class="ghost-button small-button"
-            type="button"
-            data-history-query="${escapeAttribute(entry.query)}"
-          >
-            Search again
-          </button>
-        </div>
-      `
-    )
-    .join("");
+  const avgCpu = average(cpuPoints.map((point) => point.value_percent));
+  const avgMemory = average(memoryPoints.map((point) => point.value_percent));
+  const utilizationScore = Math.max(avgCpu, avgMemory);
+  const underutilized = utilizationScore < threshold;
+  const monthlyCost =
+    typeof server.monthly_cost === "number" ? server.monthly_cost : null;
+  const annualCost =
+    typeof server.annual_cost === "number"
+      ? server.annual_cost
+      : monthlyCost !== null
+        ? monthlyCost * 12
+        : null;
+
+  return {
+    ...server,
+    analysis_window_days: inclusiveDayDifference(startDate, endDate),
+    avg_cpu: avgCpu,
+    avg_memory: avgMemory,
+    utilization_score: utilizationScore,
+    status: underutilized ? "Underutilized" : "Healthy",
+    monthly_cost: monthlyCost,
+    annual_cost: annualCost,
+    monthly_savings_if_removed: underutilized ? monthlyCost : monthlyCost !== null ? 0 : null,
+    annual_savings_if_removed: underutilized ? annualCost : annualCost !== null ? 0 : null,
+    recommendation: underutilized
+      ? "Review for removal or consolidation"
+      : "Keep in service",
+    rationale: buildRationale({
+      serverId: server.server_id,
+      utilizationScore,
+      threshold,
+      dayCount: inclusiveDayDifference(startDate, endDate),
+      underutilized,
+      monthlyCost,
+      annualCost,
+      currency: server.currency,
+    }),
+  };
 }
 
-function renderStorageSummary() {
-  const items = [
+function buildRationale({
+  serverId,
+  utilizationScore,
+  threshold,
+  dayCount,
+  underutilized,
+  monthlyCost,
+  annualCost,
+  currency,
+}) {
+  if (!underutilized) {
+    return `${serverId} is operating above the ${threshold.toFixed(
+      1
+    )}% threshold with a ${utilizationScore.toFixed(
+      1
+    )}% utilization score over the selected ${dayCount}-day window.`;
+  }
+
+  if (typeof monthlyCost !== "number" || typeof annualCost !== "number") {
+    return `${serverId} averaged ${utilizationScore.toFixed(
+      1
+    )}% utilization over the selected ${dayCount}-day window, which is below the ${threshold.toFixed(
+      1
+    )}% threshold. The server should be reviewed for removal or consolidation, but no cost data was supplied for savings estimation.`;
+  }
+
+  return `${serverId} averaged ${utilizationScore.toFixed(
+    1
+  )}% utilization over the selected ${dayCount}-day window, which is below the ${threshold.toFixed(
+    1
+  )}% threshold. If it can be safely removed or consolidated, the organization could avoid about ${currency} ${monthlyCost.toFixed(
+    2
+  )} per month and ${currency} ${annualCost.toFixed(2)} per year.`;
+}
+
+function computeSummary(servers) {
+  const underutilizedServers = servers.filter(
+    (server) => server.status.toLowerCase() === "underutilized"
+  );
+  const healthyServers = servers.length - underutilizedServers.length;
+  return {
+    servers_analyzed: servers.length,
+    underutilized_servers: underutilizedServers.length,
+    healthy_servers: healthyServers,
+    potential_monthly_savings_by_currency: aggregateSavingsByCurrency(
+      underutilizedServers,
+      "monthly_savings_if_removed"
+    ),
+    potential_annual_savings_by_currency: aggregateSavingsByCurrency(
+      underutilizedServers,
+      "annual_savings_if_removed"
+    ),
+  };
+}
+
+function renderSummary(view) {
+  const summary = view.summary;
+  const underutilized = Number(summary.underutilized_servers ?? 0);
+  const healthy = Number(summary.healthy_servers ?? 0);
+  const total = Math.max(underutilized + healthy, 1);
+  const monthlyTotals = summary.potential_monthly_savings_by_currency ?? {};
+  const annualTotals = summary.potential_annual_savings_by_currency ?? {};
+  const generatedAt = formatDate(state.report.generated_at);
+
+  elements.thresholdValue.textContent = `${Number(
+    state.report.threshold_percent ?? 0
+  ).toFixed(1)}%`;
+  elements.windowDays.textContent = `${view.windowDays} days`;
+  elements.generatedAt.textContent = generatedAt;
+
+  elements.underutilizedCount.textContent = String(underutilized);
+  elements.healthyCount.textContent = String(healthy);
+  elements.monthlySavings.textContent = formatSavingsBuckets(monthlyTotals);
+  elements.annualSavings.textContent = formatSavingsBuckets(annualTotals);
+
+  elements.distributionUnderutilized.style.width = `${
+    (underutilized / total) * 100
+  }%`;
+  elements.distributionHealthy.style.width = `${(healthy / total) * 100}%`;
+
+  const highestSavingsServer = [...view.servers]
+    .filter((server) => typeof server.monthly_savings_if_removed === "number")
+    .sort(
+      (left, right) =>
+        (right.monthly_savings_if_removed ?? 0) -
+        (left.monthly_savings_if_removed ?? 0)
+    )[0];
+
+  const insightCards = [
     {
-      label: "Saved deals",
-      value: String(state.savedOffers.length),
-      body: "Pinned offers with their product title, source, URL, and price snapshot.",
+      label: "Servers analyzed",
+      value: String(summary.servers_analyzed ?? view.servers.length),
     },
     {
-      label: "Search history",
-      value: String(state.history.length),
-      body: "Recent product scans so you can rerun the same hunt quickly.",
+      label: "Threshold",
+      value: `${Number(state.report.threshold_percent ?? 0).toFixed(1)}%`,
     },
     {
-      label: "Latest scan",
-      value: state.lastRun?.results?.length ? `${state.lastRun.results.length}` : "0",
-      body: "Most recent successful result set restored when you revisit the page.",
+      label: "Largest monthly opportunity",
+      value: highestSavingsServer
+        ? `${highestSavingsServer.server_id} · ${formatCurrency(
+            highestSavingsServer.monthly_savings_if_removed,
+            highestSavingsServer.currency
+          )}`
+        : "N/A",
     },
   ];
 
-  elements.storageSummary.innerHTML = items
+  elements.insightStrip.innerHTML = insightCards
     .map(
       (item) => `
-        <article class="storage-item">
-          <div>
-            <strong>${escapeHtml(item.label)}</strong>
-            <p>${escapeHtml(item.body)}</p>
-          </div>
+        <article class="insight-card">
+          <span>${escapeHtml(item.label)}</span>
           <strong>${escapeHtml(item.value)}</strong>
         </article>
       `
@@ -1233,258 +406,336 @@ function renderStorageSummary() {
     .join("");
 }
 
-function syncSettingsInputs() {
-  elements.modeSelect.value = state.settings.dutyMode;
-  elements.customDutyInput.value = String(state.settings.customDutyRate);
-  elements.shippingBufferInput.value = String(state.settings.shippingBufferPercent);
-  elements.insuranceInput.value = String(state.settings.insurancePercent);
-  elements.handlingFeeInput.value = String(state.settings.handlingFeeInr);
-  elements.customDutyWrap.classList.toggle(
-    "hidden",
-    state.settings.dutyMode !== "custom"
-  );
-  elements.formulaNote.textContent =
-    IMPORT_MODE_DETAILS[state.settings.dutyMode]?.formula ??
-    IMPORT_MODE_DETAILS.personal.formula;
+function renderServers(servers) {
+  elements.emptyState.classList.toggle("hidden", servers.length > 0);
+
+  elements.serverGrid.innerHTML = servers
+    .map(
+      (server) => `
+        <article class="server-card">
+          <div class="server-card-header">
+            <div>
+              <h3>${escapeHtml(server.server_id)}</h3>
+              <p>${escapeHtml(server.recommendation)}</p>
+            </div>
+            <span class="status-pill ${statusClass(server.status)}">${escapeHtml(server.status)}</span>
+          </div>
+
+          <div class="meter">
+            <div class="meter-header">
+              <span>CPU</span>
+              <strong>${formatPercent(server.avg_cpu)}</strong>
+            </div>
+            <div class="meter-track">
+              <div class="meter-fill cpu" style="width: ${clampPercent(server.avg_cpu)}%"></div>
+            </div>
+          </div>
+
+          <div class="meter">
+            <div class="meter-header">
+              <span>Memory</span>
+              <strong>${formatPercent(server.avg_memory)}</strong>
+            </div>
+            <div class="meter-track">
+              <div class="meter-fill memory" style="width: ${clampPercent(server.avg_memory)}%"></div>
+            </div>
+          </div>
+
+          <div class="server-meta">
+            <div>
+              <span>Utilization score</span>
+              <strong>${formatPercent(server.utilization_score)}</strong>
+            </div>
+            <div>
+              <span>Monthly cost</span>
+              <strong>${formatCurrency(server.monthly_cost, server.currency)}</strong>
+            </div>
+            <div>
+              <span>Savings if removed</span>
+              <strong>${formatCurrency(
+                server.monthly_savings_if_removed,
+                server.currency
+              )}</strong>
+            </div>
+          </div>
+        </article>
+      `
+    )
+    .join("");
+
+  elements.serverTableBody.innerHTML = servers
+    .map(
+      (server) => `
+        <tr>
+          <td>${escapeHtml(server.server_id)}</td>
+          <td>${formatPercent(server.avg_cpu)}</td>
+          <td>${formatPercent(server.avg_memory)}</td>
+          <td class="score-cell">${formatPercent(server.utilization_score)}</td>
+          <td><span class="status-pill ${statusClass(server.status)}">${escapeHtml(server.status)}</span></td>
+          <td>${formatCurrency(server.monthly_cost, server.currency)}</td>
+          <td>${formatCurrency(server.monthly_savings_if_removed, server.currency)}</td>
+        </tr>
+      `
+    )
+    .join("");
 }
 
-function syncFilterButtons() {
-  elements.filterGroup.querySelectorAll("[data-filter]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.filter === state.filter);
+function renderRecommendations(servers) {
+  elements.recommendationsList.innerHTML = servers
+    .map(
+      (server) => `
+        <article class="recommendation-card">
+          <div class="server-card-header">
+            <h3>${escapeHtml(server.server_id)}</h3>
+            <span class="status-pill ${statusClass(server.status)}">${escapeHtml(server.status)}</span>
+          </div>
+          <p>${escapeHtml(server.rationale)}</p>
+          <ul>
+            ${(server.caveats ?? [])
+              .map((item) => `<li>${escapeHtml(item)}</li>`)
+              .join("")}
+          </ul>
+        </article>
+      `
+    )
+    .join("");
+}
+
+function renderWarnings(warnings) {
+  const hasWarnings = warnings.length > 0;
+  elements.warningsPanel.classList.toggle("hidden", !hasWarnings);
+  elements.warningsList.innerHTML = warnings
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join("");
+}
+
+function renderMissing(missingServers) {
+  const hasMissing = missingServers.length > 0;
+  elements.missingPanel.classList.toggle("hidden", !hasMissing);
+  elements.missingList.innerHTML = missingServers
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join("");
+}
+
+function renderDateNotes(view) {
+  if (!state.supportsDateFiltering) {
+    elements.dateRangeNote.textContent =
+      "This report does not include raw metric samples, so date changes are disabled.";
+    return;
+  }
+
+  const available = `${formatDateLabel(
+    state.availableStartDate
+  )} to ${formatDateLabel(state.availableEndDate)}`;
+  const selected = `${formatDateLabel(
+    state.selectedStartDate
+  )} to ${formatDateLabel(state.selectedEndDate)}`;
+  const fullWindowSelected =
+    state.selectedStartDate === state.availableStartDate &&
+    state.selectedEndDate === state.availableEndDate;
+
+  elements.dateRangeNote.textContent = fullWindowSelected
+    ? `Available range: ${available}. Showing the full loaded window.`
+    : `Available range: ${available}. Recalculating metrics for ${selected} (${view.windowDays} days).`;
+}
+
+function syncDateInputs() {
+  elements.startDateInput.min = state.availableStartDate;
+  elements.startDateInput.max = state.availableEndDate;
+  elements.endDateInput.min = state.availableStartDate;
+  elements.endDateInput.max = state.availableEndDate;
+  elements.startDateInput.value = state.selectedStartDate;
+  elements.endDateInput.value = state.selectedEndDate;
+
+  const disabled = !state.supportsDateFiltering;
+  elements.startDateInput.disabled = disabled;
+  elements.endDateInput.disabled = disabled;
+  elements.resetDatesButton.disabled = disabled;
+}
+
+function hasServerMetricSeries(report) {
+  return (report.server_metrics ?? []).some((entry) =>
+    Object.values(entry.metrics ?? {}).some(
+      (metric) => Array.isArray(metric.points) && metric.points.length > 0
+    )
+  );
+}
+
+function getAvailableDateWindow(report) {
+  const dates = [];
+  for (const entry of report.server_metrics ?? []) {
+    for (const metric of Object.values(entry.metrics ?? {})) {
+      for (const point of metric.points ?? []) {
+        const dateValue = toDateInputValue(point.timestamp);
+        if (dateValue) {
+          dates.push(dateValue);
+        }
+      }
+    }
+  }
+
+  if (dates.length > 0) {
+    dates.sort();
+    return {
+      start: dates[0],
+      end: dates[dates.length - 1],
+    };
+  }
+
+  const start = toDateInputValue(report.analysis_window?.start);
+  const end = toDateInputValue(report.analysis_window?.end);
+  if (start && end) {
+    return { start, end };
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  return { start: today, end: today };
+}
+
+function normalizeDateWindow(start, end, min, max) {
+  let normalizedStart = clampDateString(start, min, max);
+  let normalizedEnd = clampDateString(end, min, max);
+  if (normalizedStart > normalizedEnd) {
+    [normalizedStart, normalizedEnd] = [normalizedEnd, normalizedStart];
+  }
+  return { start: normalizedStart, end: normalizedEnd };
+}
+
+function clampDateString(value, min, max) {
+  if (!value) {
+    return min;
+  }
+  if (value < min) {
+    return min;
+  }
+  if (value > max) {
+    return max;
+  }
+  return value;
+}
+
+function filterPointsByDate(points, startDate, endDate) {
+  const start = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T23:59:59.999Z`);
+  return points.filter((point) => {
+    const timestamp = new Date(point.timestamp);
+    return timestamp >= start && timestamp <= end;
   });
 }
 
-function getVisibleResults() {
-  const filtered = state.results.filter((offer) => {
-    if (state.filter === "all") {
-      return true;
+function aggregateSavingsByCurrency(servers, key) {
+  return servers.reduce((totals, server) => {
+    const amount = server[key];
+    if (typeof amount !== "number") {
+      return totals;
     }
-    return offer.market === state.filter;
-  });
-
-  return filtered.sort((left, right) => {
-    if (state.sort === "listed") {
-      return left.basePriceInr - right.basePriceInr;
-    }
-    if (state.sort === "source") {
-      return (
-        left.sourceLabel.localeCompare(right.sourceLabel) ||
-        left.landedCostInr - right.landedCostInr
-      );
-    }
-    return left.landedCostInr - right.landedCostInr;
-  });
+    totals[server.currency] = (totals[server.currency] ?? 0) + amount;
+    return totals;
+  }, {});
 }
 
-function getBestOffer(offers, market) {
-  const eligible = offers.filter((offer) =>
-    market === "all" ? true : offer.market === market
-  );
-  if (!eligible.length) {
-    return null;
-  }
-  return eligible.reduce((best, current) =>
-    current.landedCostInr < best.landedCostInr ? current : best
-  );
+function inclusiveDayDifference(startDate, endDate) {
+  const start = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
+  return Math.round((end - start) / 86400000) + 1;
 }
 
-function buildDeltaLine(offer) {
-  if (offer.market === "import") {
-    if (offer.referenceDeltaInr === null) {
-      return "Import estimate includes duty and shipping buffer for India.";
-    }
-    if (offer.referenceDeltaInr < 0) {
-      return `Cheaper than the best India route by ${formatMoney(
-        Math.abs(offer.referenceDeltaInr),
-        "INR"
-      )}.`;
-    }
-    return `Costs ${formatMoney(
-      Math.abs(offer.referenceDeltaInr),
-      "INR"
-    )} more than the best India route.`;
+function average(values) {
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function uniqueStrings(values) {
+  return [...new Set(values)];
+}
+
+function statusClass(status) {
+  return status.toLowerCase() === "underutilized" ? "underutilized" : "healthy";
+}
+
+function formatPercent(value) {
+  return `${Number(value ?? 0).toFixed(1)}%`;
+}
+
+function clampPercent(value) {
+  return Math.max(0, Math.min(Number(value ?? 0), 100));
+}
+
+function formatCurrency(amount, currency = "USD") {
+  if (typeof amount !== "number") {
+    return "N/A";
   }
 
-  if (offer.referenceDeltaInr === null) {
-    return "Domestic checkout, no import duty estimate added.";
-  }
-  if (offer.referenceDeltaInr < 0) {
-    return `Cheaper than the best import route by ${formatMoney(
-      Math.abs(offer.referenceDeltaInr),
-      "INR"
-    )}.`;
-  }
-  return `Safer local buy, but the best import route is ${formatMoney(
-    Math.abs(offer.referenceDeltaInr),
-    "INR"
-  )} cheaper.`;
-}
-
-function buildImageMarkup(imageUrl, label, compact = false) {
-  const className = compact ? "saved-image" : "result-image";
-  if (imageUrl) {
-    return `<img class="${className}" src="${escapeAttribute(
-      imageUrl
-    )}" alt="${escapeAttribute(label)}" loading="lazy" />`;
-  }
-  return `<div class="image-fallback">${escapeHtml(label)}</div>`;
-}
-
-function resetSourceStatuses() {
-  state.sourceStatuses = Object.fromEntries(
-    SOURCE_DEFINITIONS.map((source) => [
-      source.id,
-      {
-        state: state.settings.enabledSources.includes(source.id) ? "idle" : "off",
-        detail: state.settings.enabledSources.includes(source.id) ? "Ready" : "Off",
-      },
-    ])
-  );
-}
-
-function setSourceStatus(sourceId, nextState, detail) {
-  state.sourceStatuses[sourceId] = {
-    state: nextState,
-    detail,
-  };
-  renderSourceChips();
-}
-
-function getActiveSources() {
-  return SOURCE_DEFINITIONS.filter((source) =>
-    state.settings.enabledSources.includes(source.id)
-  );
-}
-
-function hasActiveImportSource() {
-  return getActiveSources().some((source) => source.market === "import");
-}
-
-function persistSettings() {
-  localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(state.settings));
-}
-
-function persistSavedOffers() {
-  localStorage.setItem(STORAGE_KEYS.savedOffers, JSON.stringify(state.savedOffers));
-}
-
-function persistHistory() {
-  localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(state.history));
-}
-
-function persistLastRun() {
-  state.lastRun = {
-    query: state.query,
-    results: state.results,
-    searchedAt: new Date().toISOString(),
-    errors: state.errors,
-  };
-  localStorage.setItem(STORAGE_KEYS.lastRun, JSON.stringify(state.lastRun));
-}
-
-function readStorage(key, fallback) {
   try {
-    const value = localStorage.getItem(key);
-    return value ? JSON.parse(value) : fallback;
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 2,
+    }).format(amount);
   } catch (error) {
-    console.warn(`Unable to read ${key}`, error);
-    return fallback;
+    return `${currency} ${amount.toFixed(2)}`;
   }
 }
 
-function createOfferId(sourceId, title, price, currency) {
-  return `${sourceId}-${slugify(title).slice(0, 56)}-${currency.toLowerCase()}-${String(
-    Math.round(price * 100)
-  )}`;
+function formatSavingsBuckets(totals) {
+  const entries = Object.entries(totals ?? {});
+  if (entries.length === 0) {
+    return "N/A";
+  }
+  return entries
+    .map(([currency, amount]) => formatCurrency(amount, currency))
+    .join(" · ");
 }
 
-function slugify(text) {
-  return normalizeForMatch(text).replace(/\s+/g, "-");
-}
-
-function normalizeForMatch(text) {
-  return String(text ?? "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
-}
-
-function cleanTitle(text) {
-  return String(text ?? "").replace(/\s+/g, " ").trim();
-}
-
-function parseNumericPrice(text) {
-  return Number(String(text).replace(/,/g, "").trim());
-}
-
-function formatMoney(amount, currency) {
-  if (!Number.isFinite(amount)) {
+function formatDate(value) {
+  if (!value) {
     return "-";
   }
-  return new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: currency === "INR" ? 0 : 2,
-  }).format(amount);
-}
 
-function formatFxLine() {
-  return `1 USD = ${formatNumber(state.exchangeRates.USD)} INR`;
-}
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) {
+    return value;
+  }
 
-function formatNumber(value) {
-  return new Intl.NumberFormat("en-IN", {
-    maximumFractionDigits: 2,
-  }).format(value);
-}
-
-function formatDateTime(value) {
-  return new Intl.DateTimeFormat("en-IN", {
+  return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
-  }).format(new Date(value));
+  }).format(date);
 }
 
-function roundMoney(value) {
-  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
-}
-
-function clampNumber(value, min, max, fallback) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) {
-    return fallback;
+function formatDateLabel(value) {
+  if (!value) {
+    return "-";
   }
-  return Math.min(Math.max(numeric, min), max);
+
+  const date = new Date(`${value}T00:00:00Z`);
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeZone: "UTC",
+  }).format(date);
 }
 
-function dedupeOffers(offers) {
-  const seen = new Set();
-  return offers.filter((offer) => {
-    const key = `${offer.sourceId}::${normalizeForMatch(offer.title)}::${offer.price}`;
-    if (seen.has(key)) {
-      return false;
-    }
-    seen.add(key);
-    return true;
-  });
+function toDateInputValue(value) {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) {
+    return "";
+  }
+  return date.toISOString().slice(0, 10);
 }
 
-function getSystemTheme() {
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
+function showLoadError(message) {
+  elements.dataSourceNote.textContent = message;
 }
 
 function escapeHtml(value) {
   return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
-function escapeAttribute(value) {
-  return escapeHtml(value);
-}
+init().catch((error) => showLoadError(error.message));
