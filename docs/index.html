@@ -3,210 +3,388 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Server Utilization Command Center</title>
+    <title>Pretext Watchboard</title>
     <meta
       name="description"
-      content="Interactive dashboard for reviewing server utilization reports and cost-saving opportunities."
+      content="A MAL-inspired social watch tracker for TV shows, movies, friends lists, live TV charts, IMDb links, and spoiler-safe community boards."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Newsreader:opsz,wght@6..72,500;6..72,600;6..72,700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div class="page-shell">
-      <header class="hero">
-        <div class="hero-copy">
-          <p class="eyebrow">Server Utilization Agent UI</p>
-          <h1>Command center for underutilized infrastructure.</h1>
-          <p class="hero-text">
-            Review the latest utilization report, highlight servers below the
-            40% threshold, and surface the savings available from safe
-            decommissioning or consolidation.
-          </p>
-          <div class="hero-actions">
-            <button class="primary-button" id="load-sample-button" type="button">
-              Load Sample Report
-            </button>
-            <label class="secondary-button" for="report-upload">
-              Upload JSON Report
-            </label>
-            <input
-              id="report-upload"
-              class="visually-hidden"
-              type="file"
-              accept=".json,application/json"
-            />
-          </div>
-          <div class="date-controls">
-            <div class="date-control">
-              <label for="start-date-input">Start date</label>
-              <input id="start-date-input" type="date" />
-            </div>
-            <div class="date-control">
-              <label for="end-date-input">End date</label>
-              <input id="end-date-input" type="date" />
-            </div>
-            <button class="ghost-button" id="reset-dates-button" type="button">
-              Reset window
-            </button>
-          </div>
-          <p class="hero-note" id="data-source-note">
-            Showing bundled sample data from the generated MVP report.
-          </p>
-          <p class="hero-note" id="date-range-note">
-            Date controls recalculate metrics within the loaded report window.
-          </p>
-        </div>
-
-        <aside class="hero-panel">
-          <div class="panel-chip">Flag rule</div>
-          <p class="panel-metric" id="threshold-value">40.0%</p>
-          <p class="panel-caption">Any server below this utilization score is marked underutilized.</p>
-          <div class="panel-grid">
-            <div>
-              <span>Window</span>
-              <strong id="window-days">30 days</strong>
-            </div>
-            <div>
-              <span>Updated</span>
-              <strong id="generated-at">-</strong>
-            </div>
-          </div>
-        </aside>
+    <div class="pretext-shell" id="top">
+      <header class="topbar">
+        <a class="brand-mark" href="#top" aria-label="Pretext Watchboard home">
+          <span class="brand-mark__dot"></span>
+          Pretext Watchboard
+        </a>
+        <nav class="topbar-nav" aria-label="Primary navigation">
+          <a href="#discover">Discover</a>
+          <a href="#library">My List</a>
+          <a href="#people">People</a>
+          <a href="#boards">Boards</a>
+        </nav>
+        <button class="session-pill" id="session-action" type="button">
+          Sign in
+        </button>
       </header>
 
-      <main class="dashboard">
-        <section class="summary-grid" aria-label="Summary metrics">
-          <article class="metric-card accent-red">
-            <span class="metric-label">Underutilized</span>
-            <strong class="metric-value" id="underutilized-count">0</strong>
-            <p class="metric-footnote">Servers below the threshold.</p>
-          </article>
-          <article class="metric-card accent-green">
-            <span class="metric-label">Healthy</span>
-            <strong class="metric-value" id="healthy-count">0</strong>
-            <p class="metric-footnote">Servers staying above the threshold.</p>
-          </article>
-          <article class="metric-card accent-amber">
-            <span class="metric-label">Monthly savings</span>
-            <strong class="metric-value" id="monthly-savings">-</strong>
-            <p class="metric-footnote">Combined avoidable spend from flagged servers.</p>
-          </article>
-          <article class="metric-card accent-blue">
-            <span class="metric-label">Annual savings</span>
-            <strong class="metric-value" id="annual-savings">-</strong>
-            <p class="metric-footnote">Potential yearly impact if safe to remove.</p>
-          </article>
-        </section>
+      <main>
+        <section class="hero-grid" aria-label="Product overview and session">
+          <article class="hero-panel hero-copy">
+            <p class="eyebrow">MAL-style tracking for shows + movies</p>
+            <h1>Break the taste silo. Watch what your circles keep missing.</h1>
+            <p class="hero-text">
+              Track every TV show and film, browse public friend lists, post in
+              spoiler-safe boards, and get cross-circle recommendations that
+              mix IMDb signals, friend activity, and live TV chart momentum.
+            </p>
 
-        <section class="panel layout-panel">
-          <div class="panel-header">
-            <div>
-              <p class="section-kicker">Fleet Snapshot</p>
-              <h2>Utilization mix</h2>
+            <div class="hero-actions">
+              <a class="primary-button" href="#discover">Explore discovery</a>
+              <a class="secondary-button" href="#people">Browse people</a>
             </div>
-          </div>
 
-          <div class="distribution">
-            <div class="distribution-bar" aria-hidden="true">
-              <div class="distribution-segment underutilized" id="distribution-underutilized"></div>
-              <div class="distribution-segment healthy" id="distribution-healthy"></div>
+            <div class="hero-brief-grid">
+              <article class="mini-brief">
+                <span>Social graph</span>
+                <strong>Friend shelves + public lists</strong>
+              </article>
+              <article class="mini-brief">
+                <span>Anti-silo</span>
+                <strong>Taste-bridge picks and bubble alerts</strong>
+              </article>
+              <article class="mini-brief">
+                <span>Streaming intel</span>
+                <strong>TVMaze chart pulse + IMDb deep links</strong>
+              </article>
             </div>
-            <div class="distribution-legend">
-              <span><i class="legend-swatch underutilized"></i>Underutilized</span>
-              <span><i class="legend-swatch healthy"></i>Healthy</span>
-            </div>
-          </div>
+          </article>
 
-          <div class="insight-strip" id="insight-strip"></div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-header split-header">
-            <div>
-              <p class="section-kicker">Interactive Review</p>
-              <h2>Servers</h2>
-            </div>
-            <div class="toolbar">
-              <input
-                id="search-input"
-                class="search-input"
-                type="search"
-                placeholder="Search server..."
-                aria-label="Search server"
-              />
-              <div class="filter-group" role="tablist" aria-label="Status filters">
-                <button class="filter-button active" data-filter="all" type="button">All</button>
-                <button class="filter-button" data-filter="underutilized" type="button">Underutilized</button>
-                <button class="filter-button" data-filter="healthy" type="button">Healthy</button>
+          <aside class="hero-panel auth-panel">
+            <section class="auth-card" id="auth-card">
+              <div class="section-head">
+                <p class="eyebrow">Login</p>
+                <h2>Enter the community.</h2>
               </div>
-            </div>
-          </div>
 
-          <div class="server-grid" id="server-grid"></div>
-          <p class="empty-state hidden" id="empty-state">No servers match this filter.</p>
+              <div class="auth-toggle" role="tablist" aria-label="Auth mode">
+                <button
+                  class="toggle-chip is-active"
+                  type="button"
+                  data-auth-mode="signin"
+                >
+                  Sign in
+                </button>
+                <button
+                  class="toggle-chip"
+                  type="button"
+                  data-auth-mode="signup"
+                >
+                  Create account
+                </button>
+              </div>
+
+              <form class="stack-form" id="auth-form">
+                <label class="field-label" for="auth-name-input">
+                  Display name
+                  <input
+                    id="auth-name-input"
+                    type="text"
+                    placeholder="Your name"
+                    autocomplete="name"
+                  />
+                </label>
+                <label class="field-label" for="auth-handle-input">
+                  Handle
+                  <input
+                    id="auth-handle-input"
+                    type="text"
+                    placeholder="nova"
+                    autocomplete="username"
+                    required
+                  />
+                </label>
+                <label class="field-label" for="auth-password-input">
+                  Password
+                  <input
+                    id="auth-password-input"
+                    type="password"
+                    placeholder="demo password"
+                    autocomplete="current-password"
+                    required
+                  />
+                </label>
+                <button class="primary-button form-submit" id="auth-submit" type="submit">
+                  Sign in
+                </button>
+              </form>
+
+              <p class="helper-copy" id="auth-helper">
+                Demo handles: <strong>nova</strong>, <strong>milo</strong>,
+                <strong>zoya</strong>. Their password is the same as the handle.
+              </p>
+            </section>
+
+            <section class="profile-card is-hidden" id="profile-card">
+              <div class="active-user">
+                <div class="avatar-xl" id="profile-avatar">PW</div>
+                <div>
+                  <p class="eyebrow">Signed in as</p>
+                  <h2 id="profile-name">Pretext user</h2>
+                  <p class="muted-copy" id="profile-meta">@handle · city</p>
+                </div>
+              </div>
+
+              <p class="profile-bio" id="profile-bio"></p>
+
+              <div class="session-stats">
+                <article class="session-stat">
+                  <span>Tracked</span>
+                  <strong id="hero-tracked-count">0</strong>
+                </article>
+                <article class="session-stat">
+                  <span>Friends</span>
+                  <strong id="hero-friend-count">0</strong>
+                </article>
+                <article class="session-stat">
+                  <span>Bridge score</span>
+                  <strong id="hero-bridge-score">0</strong>
+                </article>
+              </div>
+
+              <div class="profile-actions">
+                <a class="secondary-button" href="#library">Update list</a>
+                <button class="ghost-button" id="signout-button" type="button">
+                  Sign out
+                </button>
+              </div>
+            </section>
+          </aside>
         </section>
 
-        <section class="panel">
-          <div class="panel-header">
-            <div>
-              <p class="section-kicker">Report Table</p>
-              <h2>Detailed view</h2>
-            </div>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Server</th>
-                  <th>CPU</th>
-                  <th>Memory</th>
-                  <th>Score</th>
-                  <th>Status</th>
-                  <th>Monthly cost</th>
-                  <th>Savings if removed</th>
-                </tr>
-              </thead>
-              <tbody id="server-table-body"></tbody>
-            </table>
-          </div>
+        <section class="metric-grid" aria-label="Account and network stats">
+          <article class="metric-card">
+            <span class="metric-label">Total titles tracked</span>
+            <strong class="metric-value" id="metric-total">0</strong>
+            <p class="metric-copy">Your personal MAL-style list across TV and film.</p>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Friend circle</span>
+            <strong class="metric-value" id="metric-friends">0</strong>
+            <p class="metric-copy">People whose shelves and boards you follow.</p>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Watch-status spread</span>
+            <strong class="metric-value" id="metric-active">0</strong>
+            <p class="metric-copy">Currently watching + plan-to-watch entries.</p>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Silo breaker index</span>
+            <strong class="metric-value" id="metric-bridge">0</strong>
+            <p class="metric-copy">Higher means your queue spans more genres and circles.</p>
+          </article>
         </section>
 
-        <section class="panel recommendations-panel">
-          <div class="panel-header">
-            <div>
-              <p class="section-kicker">Narrative Output</p>
-              <h2>Recommendations</h2>
+        <section class="split-grid" id="discover" aria-label="Discovery and charts">
+          <article class="panel discovery-panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Cross-circle discovery</p>
+                <h2>Anti-silo recommendations</h2>
+              </div>
+              <p class="context-chip" id="discovery-chip">Taste bridge</p>
             </div>
-          </div>
-          <div id="recommendations-list" class="recommendations-list"></div>
+
+            <p class="panel-copy" id="discovery-summary"></p>
+            <div class="bridge-grid" id="discovery-grid"></div>
+          </article>
+
+          <article class="panel chart-panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">TV charts + IMDb</p>
+                <h2>Live TVMaze chart pulse</h2>
+              </div>
+              <button class="ghost-button compact" id="refresh-chart-button" type="button">
+                Refresh chart
+              </button>
+            </div>
+
+            <p class="panel-copy" id="chart-status">
+              Pulling a fresh TV chart and attaching IMDb links where available.
+            </p>
+            <div class="chart-grid" id="chart-grid"></div>
+          </article>
         </section>
 
-        <section class="panel hidden" id="warnings-panel">
-          <div class="panel-header">
+        <section class="panel" id="library" aria-label="My watch list">
+          <div class="section-head">
             <div>
-              <p class="section-kicker">Data Quality</p>
-              <h2>Warnings</h2>
+              <p class="eyebrow">My list</p>
+              <h2>Track every TV show and movie</h2>
+            </div>
+            <div class="filter-row" role="tablist" aria-label="Shelf filters">
+              <button class="toggle-chip is-active" type="button" data-shelf-filter="all">
+                All
+              </button>
+              <button class="toggle-chip" type="button" data-shelf-filter="Watching">
+                Watching
+              </button>
+              <button class="toggle-chip" type="button" data-shelf-filter="Completed">
+                Completed
+              </button>
+              <button class="toggle-chip" type="button" data-shelf-filter="Planning">
+                Planning
+              </button>
+              <button class="toggle-chip" type="button" data-shelf-filter="Dropped">
+                Dropped
+              </button>
             </div>
           </div>
-          <ul class="message-list" id="warnings-list"></ul>
+
+          <form class="library-form" id="library-form">
+            <label class="field-label" for="title-input">
+              Title
+              <input
+                id="title-input"
+                type="text"
+                list="catalog-suggestions"
+                placeholder="Search existing catalog or type a new title"
+                required
+              />
+              <datalist id="catalog-suggestions"></datalist>
+            </label>
+            <label class="field-label" for="kind-input">
+              Type
+              <select id="kind-input">
+                <option value="TV Show">TV Show</option>
+                <option value="Movie">Movie</option>
+              </select>
+            </label>
+            <label class="field-label" for="status-input">
+              Status
+              <select id="status-input">
+                <option value="Watching">Watching</option>
+                <option value="Planning">Planning</option>
+                <option value="Completed">Completed</option>
+                <option value="Paused">Paused</option>
+                <option value="Dropped">Dropped</option>
+              </select>
+            </label>
+            <label class="field-label" for="score-input">
+              Score
+              <input id="score-input" type="number" min="0" max="10" step="0.1" value="8.5" />
+            </label>
+            <label class="field-label" for="progress-input">
+              Progress
+              <input id="progress-input" type="text" placeholder="S1 E4, 6/10, rewatch" />
+            </label>
+            <label class="field-label" for="genres-input">
+              Genres
+              <input id="genres-input" type="text" placeholder="Drama, Sci-Fi" />
+            </label>
+            <label class="field-label" for="imdb-input">
+              IMDb ID
+              <input id="imdb-input" type="text" placeholder="tt0944947" />
+            </label>
+            <label class="field-label library-note" for="note-input">
+              Note
+              <input id="note-input" type="text" placeholder="Why it belongs on your shelf" />
+            </label>
+            <button class="primary-button form-submit" type="submit">Save to my list</button>
+          </form>
+
+          <div class="library-grid" id="library-grid"></div>
         </section>
 
-        <section class="panel hidden" id="missing-panel">
-          <div class="panel-header">
-            <div>
-              <p class="section-kicker">Coverage</p>
-              <h2>Missing servers</h2>
+        <section class="split-grid" id="people" aria-label="People and public lists">
+          <article class="panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">People</p>
+                <h2>Find friends and open their shelves</h2>
+              </div>
+              <p class="context-chip" id="people-count-label">0 profiles</p>
             </div>
+            <div class="people-grid" id="people-grid"></div>
+          </article>
+
+          <article class="panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Public profile</p>
+                <h2 id="public-profile-title">Open a user list</h2>
+              </div>
+              <button class="ghost-button compact" id="follow-selected-button" type="button">
+                Add friend
+              </button>
+            </div>
+
+            <div class="public-profile" id="public-profile"></div>
+          </article>
+        </section>
+
+        <section class="panel" id="boards" aria-label="Community boards">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Community boards</p>
+              <h2>Post watch-room threads and spoiler-safe debates</h2>
+            </div>
+            <p class="context-chip" id="board-count-label">0 threads</p>
           </div>
-          <ul class="message-list" id="missing-list"></ul>
+
+          <form class="board-form" id="board-form">
+            <label class="field-label" for="board-channel-input">
+              Channel
+              <select id="board-channel-input">
+                <option value="Spoiler-safe picks">Spoiler-safe picks</option>
+                <option value="Weekend watch party">Weekend watch party</option>
+                <option value="Taste bridge">Taste bridge</option>
+                <option value="Hot takes">Hot takes</option>
+              </select>
+            </label>
+            <label class="field-label" for="board-title-input">
+              Thread title
+              <input
+                id="board-title-input"
+                type="text"
+                placeholder="What should your next thread be about?"
+                required
+              />
+            </label>
+            <label class="field-label" for="board-link-input">
+              Link a title
+              <input
+                id="board-link-input"
+                type="text"
+                list="catalog-suggestions"
+                placeholder="Optional"
+              />
+            </label>
+            <label class="field-label board-body-field" for="board-body-input">
+              Thread body
+              <textarea
+                id="board-body-input"
+                rows="3"
+                placeholder="Ask for recs, announce a watch party, or explain a taste bridge..."
+                required
+              ></textarea>
+            </label>
+            <button class="primary-button form-submit" type="submit">Post thread</button>
+          </form>
+
+          <div class="board-grid" id="board-grid"></div>
         </section>
       </main>
     </div>
+
+    <p class="toast is-hidden" id="toast" role="status" aria-live="polite"></p>
 
     <script src="./app.js" type="module"></script>
   </body>
