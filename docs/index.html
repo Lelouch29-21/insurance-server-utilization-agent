@@ -19,15 +19,15 @@
   <body>
     <div class="pretext-shell" id="top">
       <header class="topbar">
-        <a class="brand-mark" href="#top" aria-label="Pretext Watchboard home">
+        <a class="brand-mark" href="#/watchlist" data-route-link="watchlist" aria-label="Pretext Watchboard home">
           <span class="brand-mark__dot"></span>
           Pretext Watchboard
         </a>
         <nav class="topbar-nav" aria-label="Primary navigation">
-          <a href="#discover">Discover</a>
-          <a href="#library">My List</a>
-          <a href="#people">People</a>
-          <a href="#boards">Boards</a>
+          <a class="nav-link is-active" href="#/watchlist" data-route-link="watchlist">Watchlist</a>
+          <a class="nav-link" href="#/discover" data-route-link="discover">Discover</a>
+          <a class="nav-link" href="#/people" data-route-link="people">People</a>
+          <a class="nav-link" href="#/community" data-route-link="community">Community</a>
         </nav>
         <button class="session-pill" id="session-action" type="button">
           Sign in
@@ -35,7 +35,88 @@
       </header>
 
       <main>
-        <section class="hero-grid" aria-label="Product overview and session">
+        <section class="page-view is-active" id="library" data-page-view="watchlist">
+          <section class="panel watchlist-panel" aria-label="My watch list">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Watchlist</p>
+                <h2 class="flow-copy">Track every TV show and movie</h2>
+              </div>
+              <div class="filter-row" role="tablist" aria-label="Shelf filters">
+                <button class="toggle-chip is-active" type="button" data-shelf-filter="all">
+                  All
+                </button>
+                <button class="toggle-chip" type="button" data-shelf-filter="Watching">
+                  Watching
+                </button>
+                <button class="toggle-chip" type="button" data-shelf-filter="Completed">
+                  Completed
+                </button>
+                <button class="toggle-chip" type="button" data-shelf-filter="Planning">
+                  Watchlist
+                </button>
+                <button class="toggle-chip" type="button" data-shelf-filter="Dropped">
+                  Dropped
+                </button>
+              </div>
+            </div>
+
+            <form class="library-form" id="library-form">
+              <label class="field-label" for="title-input">
+                Title
+                <input
+                  id="title-input"
+                  type="text"
+                  list="catalog-suggestions"
+                  placeholder="Search existing catalog or type a new title"
+                  required
+                />
+                <datalist id="catalog-suggestions"></datalist>
+              </label>
+              <label class="field-label" for="kind-input">
+                Type
+                <select id="kind-input">
+                  <option value="TV Show">TV Show</option>
+                  <option value="Movie">Movie</option>
+                </select>
+              </label>
+              <label class="field-label" for="status-input">
+                Status
+                <select id="status-input">
+                  <option value="Watching">Watching</option>
+                  <option value="Planning">Watchlist</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Paused">Paused</option>
+                  <option value="Dropped">Dropped</option>
+                </select>
+              </label>
+              <label class="field-label" for="score-input">
+                Score
+                <input id="score-input" type="number" min="0" max="10" step="0.1" value="8.5" />
+              </label>
+              <label class="field-label" for="progress-input">
+                Progress
+                <input id="progress-input" type="text" placeholder="S1 E4, 6/10, rewatch" />
+              </label>
+              <label class="field-label" for="genres-input">
+                Genres
+                <input id="genres-input" type="text" placeholder="Drama, Sci-Fi" />
+              </label>
+              <label class="field-label" for="imdb-input">
+                IMDb ID
+                <input id="imdb-input" type="text" placeholder="tt0944947" />
+              </label>
+              <label class="field-label library-note" for="note-input">
+                Note
+                <input id="note-input" type="text" placeholder="Why it belongs on your shelf" />
+              </label>
+              <button class="primary-button form-submit" type="submit">Save to my list</button>
+            </form>
+
+            <div class="library-grid" id="library-grid"></div>
+          </section>
+
+          <section class="hero-grid dashboard-grid" aria-label="Account overview and session">
           <article class="hero-panel hero-copy">
             <p class="eyebrow">MAL-style tracking for shows + movies</p>
             <h1 class="flow-copy">Track anime, TV, and movies like a social watchlist.</h1>
@@ -46,8 +127,8 @@
             </p>
 
             <div class="hero-actions">
-              <a class="primary-button" href="#library">Open watchlist</a>
-              <a class="secondary-button" href="#discover">Explore titles</a>
+              <a class="primary-button" href="#/discover" data-route-link="discover">Explore titles</a>
+              <a class="secondary-button" href="#/people" data-route-link="people">Browse people</a>
             </div>
 
             <div class="hero-brief-grid">
@@ -159,16 +240,16 @@
               </div>
 
               <div class="profile-actions">
-                <a class="secondary-button" href="#library">Update list</a>
+                <a class="secondary-button" href="#/watchlist" data-route-link="watchlist">Update list</a>
                 <button class="ghost-button" id="signout-button" type="button">
                   Sign out
                 </button>
               </div>
             </section>
           </aside>
-        </section>
+          </section>
 
-        <section class="metric-grid" aria-label="Account and network stats">
+          <section class="metric-grid" aria-label="Account and network stats">
           <article class="metric-card">
             <span class="metric-label">Total titles tracked</span>
             <strong class="metric-value" id="metric-total">0</strong>
@@ -189,9 +270,11 @@
             <strong class="metric-value" id="metric-bridge">0</strong>
             <p class="metric-copy flow-copy">Higher means your queue spans more genres and circles.</p>
           </article>
+          </section>
         </section>
 
-        <section class="split-grid" id="discover" aria-label="Discovery and charts">
+        <section class="page-view" id="discover" data-page-view="discover">
+          <section class="split-grid" aria-label="Discovery and charts">
           <article class="panel discovery-panel">
             <div class="section-head">
               <div>
@@ -221,89 +304,11 @@
             </p>
             <div class="chart-grid" id="chart-grid"></div>
           </article>
+          </section>
         </section>
 
-        <section class="panel" id="library" aria-label="My watch list">
-          <div class="section-head">
-            <div>
-              <p class="eyebrow">Watchlist</p>
-              <h2 class="flow-copy">Track every TV show and movie</h2>
-            </div>
-            <div class="filter-row" role="tablist" aria-label="Shelf filters">
-              <button class="toggle-chip is-active" type="button" data-shelf-filter="all">
-                All
-              </button>
-              <button class="toggle-chip" type="button" data-shelf-filter="Watching">
-                Watching
-              </button>
-              <button class="toggle-chip" type="button" data-shelf-filter="Completed">
-                Completed
-              </button>
-              <button class="toggle-chip" type="button" data-shelf-filter="Planning">
-                Watchlist
-              </button>
-              <button class="toggle-chip" type="button" data-shelf-filter="Dropped">
-                Dropped
-              </button>
-            </div>
-          </div>
-
-          <form class="library-form" id="library-form">
-            <label class="field-label" for="title-input">
-              Title
-              <input
-                id="title-input"
-                type="text"
-                list="catalog-suggestions"
-                placeholder="Search existing catalog or type a new title"
-                required
-              />
-              <datalist id="catalog-suggestions"></datalist>
-            </label>
-            <label class="field-label" for="kind-input">
-              Type
-              <select id="kind-input">
-                <option value="TV Show">TV Show</option>
-                <option value="Movie">Movie</option>
-              </select>
-            </label>
-            <label class="field-label" for="status-input">
-              Status
-              <select id="status-input">
-                <option value="Watching">Watching</option>
-                <option value="Planning">Watchlist</option>
-                <option value="Completed">Completed</option>
-                <option value="Paused">Paused</option>
-                <option value="Dropped">Dropped</option>
-              </select>
-            </label>
-            <label class="field-label" for="score-input">
-              Score
-              <input id="score-input" type="number" min="0" max="10" step="0.1" value="8.5" />
-            </label>
-            <label class="field-label" for="progress-input">
-              Progress
-              <input id="progress-input" type="text" placeholder="S1 E4, 6/10, rewatch" />
-            </label>
-            <label class="field-label" for="genres-input">
-              Genres
-              <input id="genres-input" type="text" placeholder="Drama, Sci-Fi" />
-            </label>
-            <label class="field-label" for="imdb-input">
-              IMDb ID
-              <input id="imdb-input" type="text" placeholder="tt0944947" />
-            </label>
-            <label class="field-label library-note" for="note-input">
-              Note
-              <input id="note-input" type="text" placeholder="Why it belongs on your shelf" />
-            </label>
-            <button class="primary-button form-submit" type="submit">Save to my list</button>
-          </form>
-
-          <div class="library-grid" id="library-grid"></div>
-        </section>
-
-        <section class="split-grid" id="people" aria-label="People and public lists">
+        <section class="page-view" id="people" data-page-view="people">
+          <section class="split-grid" aria-label="People and public lists">
           <article class="panel">
             <div class="section-head">
               <div>
@@ -328,9 +333,11 @@
 
             <div class="public-profile" id="public-profile"></div>
           </article>
+          </section>
         </section>
 
-        <section class="panel" id="boards" aria-label="Community boards">
+        <section class="page-view" id="boards" data-page-view="community">
+          <section class="panel" aria-label="Community boards">
           <div class="section-head">
             <div>
               <p class="eyebrow">Community boards</p>
@@ -380,6 +387,7 @@
           </form>
 
           <div class="board-grid" id="board-grid"></div>
+          </section>
         </section>
       </main>
     </div>

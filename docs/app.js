@@ -1,11 +1,41 @@
-const STORE_KEY = "pretext-watchboard-store-v2";
-const SESSION_KEY = "pretext-watchboard-session-v2";
+const STORE_KEY = "pretext-watchboard-store-v3";
+const SESSION_KEY = "pretext-watchboard-session-v3";
 const PRETEXT_MODULE_URL = "https://esm.sh/@chenglou/pretext@0.0.4?bundle";
 const TVMAZE_PAGES = [0, 1];
 const DEFAULT_AUTH_HANDLE = "nova";
 const DEFAULT_AUTH_PASSWORD = "nova";
-const IMAGE_FALLBACK_BASE =
-  "https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=900&q=80";
+const DEFAULT_ROUTE = "watchlist";
+const VALID_ROUTES = new Set(["watchlist", "discover", "people", "community"]);
+const POSTER_URL_BY_ID = {
+  shogun: "https://static.tvmaze.com/uploads/images/original_untouched/506/1265637.jpg",
+  severance: "https://static.tvmaze.com/uploads/images/original_untouched/548/1371406.jpg",
+  "the-bear": "https://static.tvmaze.com/uploads/images/original_untouched/592/1480192.jpg",
+  "blue-eye-samurai": "https://static.tvmaze.com/uploads/images/original_untouched/488/1220768.jpg",
+  "attack-on-titan": "https://static.tvmaze.com/uploads/images/original_untouched/476/1191684.jpg",
+  "the-white-lotus": "https://static.tvmaze.com/uploads/images/original_untouched/557/1393876.jpg",
+  "mr-robot": "https://static.tvmaze.com/uploads/images/original_untouched/211/528026.jpg",
+  chernobyl: "https://static.tvmaze.com/uploads/images/original_untouched/193/482599.jpg",
+  "the-last-of-us": "https://static.tvmaze.com/uploads/images/original_untouched/563/1409008.jpg",
+  "one-piece": "https://static.tvmaze.com/uploads/images/original_untouched/617/1543011.jpg",
+  "past-lives": "https://upload.wikimedia.org/wikipedia/en/d/da/Past_Lives_film_poster.png",
+  "everything-everywhere": "https://upload.wikimedia.org/wikipedia/en/1/1e/Everything_Everywhere_All_at_Once.jpg",
+  oppenheimer: "https://upload.wikimedia.org/wikipedia/en/4/4a/Oppenheimer_%28film%29.jpg",
+  aftersun: "https://upload.wikimedia.org/wikipedia/en/1/11/Aftersun.jpg",
+  "across-spiderverse": "https://upload.wikimedia.org/wikipedia/en/b/b4/Spider-Man-_Across_the_Spider-Verse_poster.jpg",
+  parasite: "https://upload.wikimedia.org/wikipedia/en/5/53/Parasite_%282019_film%29.png",
+  "dune-two": "https://upload.wikimedia.org/wikipedia/en/5/52/Dune_Part_Two_poster.jpeg",
+  "zone-of-interest": "https://upload.wikimedia.org/wikipedia/en/2/24/The_Zone_of_Interest_film_poster.jpg",
+};
+const DEFAULT_POSTER_DATA_URI =
+  "data:image/svg+xml;charset=UTF-8," +
+  encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="420" height="620" viewBox="0 0 420 620">
+      <rect width="420" height="620" rx="24" fill="#e8ecf6"/>
+      <rect x="22" y="22" width="376" height="576" rx="22" fill="#f8faff" stroke="#cdd6e6" stroke-width="4"/>
+      <text x="210" y="295" text-anchor="middle" font-family="Arial, sans-serif" font-size="44" font-weight="700" fill="#2e51a2">No Poster</text>
+      <text x="210" y="348" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#5f6b7a">Add IMDb / TV title</text>
+    </svg>
+  `);
 
 const SEED_CATALOG = [
   {
@@ -627,7 +657,7 @@ const FALLBACK_CHART = [
     chartScore: 97,
     runtime: "2 seasons",
     source: "Fallback chart",
-    poster: "",
+    poster: POSTER_URL_BY_ID.severance,
     summary:
       "Fallback chart pick when TVMaze is unavailable. A high-signal social mystery with huge board energy.",
   },
@@ -642,7 +672,7 @@ const FALLBACK_CHART = [
     chartScore: 96,
     runtime: "10 episodes",
     source: "Fallback chart",
-    poster: "",
+    poster: POSTER_URL_BY_ID.shogun,
     summary:
       "Fallback chart pick that connects prestige drama and action-heavy watch circles.",
   },
@@ -657,7 +687,7 @@ const FALLBACK_CHART = [
     chartScore: 95,
     runtime: "1 season",
     source: "Fallback chart",
-    poster: "",
+    poster: POSTER_URL_BY_ID["the-last-of-us"],
     summary:
       "Fallback chart pick with a strong IMDb score and a broad fan crossover.",
   },
@@ -672,7 +702,7 @@ const FALLBACK_CHART = [
     chartScore: 94,
     runtime: "3 seasons",
     source: "Fallback chart",
-    poster: "",
+    poster: POSTER_URL_BY_ID["the-bear"],
     summary:
       "Fallback chart pick with low onboarding friction and strong friend-group momentum.",
   },
@@ -692,6 +722,7 @@ const appState = {
   selectedProfileId: "",
   authMode: "signin",
   shelfFilter: "all",
+  currentRoute: DEFAULT_ROUTE,
   chartItems: deepClone(FALLBACK_CHART),
   chartStatusText:
     "Pulling a fresh TV chart from TVMaze and attaching IMDb links where available.",
@@ -760,6 +791,8 @@ const elements = {
   boardCountLabel: document.querySelector("#board-count-label"),
   boardGrid: document.querySelector("#board-grid"),
   toast: document.querySelector("#toast"),
+  pageViews: Array.from(document.querySelectorAll("[data-page-view]")),
+  routeLinks: Array.from(document.querySelectorAll("[data-route-link]")),
 };
 
 function initApp() {
@@ -769,6 +802,7 @@ function initApp() {
   }
 
   ensureSelectedProfile();
+  syncRouteFromHash();
   syncCatalogSuggestions();
   syncAuthModeControls();
   bindEventListeners();
@@ -782,6 +816,8 @@ function initApp() {
 }
 
 function bindEventListeners() {
+  window.addEventListener("hashchange", syncRouteFromHash);
+
   elements.authModeButtons.forEach((button) => {
     button.addEventListener("click", () => setAuthMode(button.dataset.authMode));
   });
@@ -795,8 +831,10 @@ function bindEventListeners() {
       return;
     }
 
-    document.querySelector("#top").scrollIntoView({ behavior: "smooth" });
-    elements.authHandleInput.focus();
+    navigateToRoute("watchlist");
+    window.setTimeout(() => {
+      elements.authHandleInput.focus();
+    }, 0);
   });
 
   elements.refreshChartButton.addEventListener("click", () => {
@@ -904,9 +942,9 @@ function bindEventListeners() {
     }
     if (button.dataset.boardAction === "open-profile") {
       appState.selectedProfileId = button.dataset.userId;
+      navigateToRoute("people");
       renderPeople();
       renderPublicProfile();
-      document.querySelector("#people").scrollIntoView({ behavior: "smooth" });
     }
   });
 
@@ -926,7 +964,60 @@ function renderApp() {
   renderPeople();
   renderPublicProfile();
   renderBoards();
+  renderCurrentRoute();
   queuePretextRender();
+}
+
+function syncRouteFromHash() {
+  const route = routeFromHash(window.location.hash);
+  if (route !== appState.currentRoute) {
+    appState.currentRoute = route;
+  }
+  if (!window.location.hash || routeToHash(window.location.hash) !== route) {
+    window.history.replaceState(null, "", `#/${route}`);
+  }
+  renderCurrentRoute();
+}
+
+function renderCurrentRoute() {
+  elements.pageViews.forEach((page) => {
+    page.classList.toggle(
+      "is-active",
+      page.dataset.pageView === appState.currentRoute
+    );
+  });
+
+  elements.routeLinks.forEach((link) => {
+    link.classList.toggle(
+      "is-active",
+      link.dataset.routeLink === appState.currentRoute
+    );
+  });
+
+  queuePretextRender();
+}
+
+function navigateToRoute(route) {
+  const safeRoute = VALID_ROUTES.has(route) ? route : DEFAULT_ROUTE;
+  window.location.hash = `#/${safeRoute}`;
+}
+
+function routeFromHash(hashValue) {
+  const rawRoute = routeToHash(hashValue);
+  if (rawRoute === "library") {
+    return "watchlist";
+  }
+  if (rawRoute === "boards") {
+    return "community";
+  }
+  return VALID_ROUTES.has(rawRoute) ? rawRoute : DEFAULT_ROUTE;
+}
+
+function routeToHash(hashValue) {
+  return String(hashValue || "")
+    .replace(/^#\/?/, "")
+    .trim()
+    .toLowerCase();
 }
 
 function renderSessionPanel() {
@@ -1827,7 +1918,7 @@ function handleAuthSubmit(event) {
   showToast(`Account created for ${newUser.name}. Nova was added as your first friend so discovery starts warm.`);
 }
 
-function handleLibrarySubmit(event) {
+async function handleLibrarySubmit(event) {
   event.preventDefault();
   const activeUser = getActiveUser();
   if (!activeUser) {
@@ -1844,12 +1935,17 @@ function handleLibrarySubmit(event) {
   const existingItem = findCatalogItemByTitle(title);
   const genres = parseGenres(elements.genresInput.value);
   const imdbId = normalizeImdbId(elements.imdbInput.value);
+  const resolvedPoster =
+    existingItem?.poster ||
+    POSTER_URL_BY_ID[existingItem?.id || ""] ||
+    (await resolvePosterForTitle(title, elements.kindInput.value));
 
   const catalogItem = existingItem
     ? upsertCatalogItem({
         ...existingItem,
         genres: genres.length > 0 ? mergeUnique(existingItem.genres, genres) : existingItem.genres,
         imdbId: imdbId || existingItem.imdbId,
+        poster: existingItem.poster || resolvedPoster,
       })
     : upsertCatalogItem({
         id: generateTitleId(title),
@@ -1863,7 +1959,7 @@ function handleLibrarySubmit(event) {
         runtime:
           elements.kindInput.value === "TV Show" ? "New series" : "Feature",
         source: "Community added",
-        poster: "",
+        poster: resolvedPoster,
         summary:
           elements.noteInput.value.trim() ||
           "Community-added title waiting for a sharper summary from your next board post.",
@@ -2223,7 +2319,7 @@ function renderPoster(item) {
         alt="${escapeHtml(item.title)} poster"
         loading="lazy"
         referrerpolicy="no-referrer"
-        onerror="this.onerror=null;this.src='${escapeHtml(IMAGE_FALLBACK_BASE)}';"
+        onerror="this.onerror=null;this.src='${escapeHtml(DEFAULT_POSTER_DATA_URI)}';"
       />
     </div>
   `;
@@ -2375,17 +2471,32 @@ function loadStore() {
     ) {
       return buildSeedStore();
     }
-    return parsed;
+    return normalizeStorePayload(parsed);
   } catch {
     return buildSeedStore();
   }
 }
 
 function buildSeedStore() {
-  return {
+  return normalizeStorePayload({
     catalog: deepClone(SEED_CATALOG),
     users: deepClone(SEED_USERS),
     boards: deepClone(SEED_BOARDS),
+  });
+}
+
+function normalizeStorePayload(store) {
+  return {
+    catalog: store.catalog.map((item) => ({
+      ...item,
+      poster:
+        item.poster ||
+        POSTER_URL_BY_ID[item.id] ||
+        POSTER_URL_BY_ID[normalizeTitleToId(item.title)] ||
+        DEFAULT_POSTER_DATA_URI,
+    })),
+    users: store.users,
+    boards: store.boards,
   };
 }
 
@@ -2417,6 +2528,14 @@ function normalizeTitle(title) {
   return title.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+function normalizeTitleToId(title) {
+  return String(title || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 function normalizeImdbId(rawValue) {
   const value = String(rawValue || "").trim();
   if (!value) {
@@ -2445,13 +2564,7 @@ function generateId(prefix) {
 }
 
 function generateTitleId(title) {
-  const slug =
-    title
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 40) || "title";
+  const slug = normalizeTitleToId(title).slice(0, 40) || "title";
   return `${slug}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
@@ -2479,12 +2592,58 @@ function initialsForName(name) {
 }
 
 function posterUrlForItem(item) {
-  if (item.poster) {
-    return item.poster;
-  }
+  return (
+    item.poster ||
+    POSTER_URL_BY_ID[item.id] ||
+    POSTER_URL_BY_ID[normalizeTitleToId(item.title)] ||
+    DEFAULT_POSTER_DATA_URI
+  );
+}
 
-  const seed = encodeURIComponent(item.id || item.title || "watchboard");
-  return `https://picsum.photos/seed/${seed}/420/620`;
+async function resolvePosterForTitle(title, kind) {
+  try {
+    if (kind === "TV Show") {
+      const response = await fetch(
+        `https://api.tvmaze.com/singlesearch/shows?q=${encodeURIComponent(title)}`
+      );
+      if (!response.ok) {
+        return DEFAULT_POSTER_DATA_URI;
+      }
+      const show = await response.json();
+      return show?.image?.original || show?.image?.medium || DEFAULT_POSTER_DATA_URI;
+    }
+
+    const searchResponse = await fetch(
+      `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(
+        `${title} film`
+      )}&format=json&origin=*`
+    );
+    if (!searchResponse.ok) {
+      return DEFAULT_POSTER_DATA_URI;
+    }
+    const searchPayload = await searchResponse.json();
+    const pageTitle = searchPayload?.query?.search?.[0]?.title;
+    if (!pageTitle) {
+      return DEFAULT_POSTER_DATA_URI;
+    }
+
+    const summaryResponse = await fetch(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(
+        pageTitle.replace(/\s+/g, "_")
+      )}`
+    );
+    if (!summaryResponse.ok) {
+      return DEFAULT_POSTER_DATA_URI;
+    }
+    const summaryPayload = await summaryResponse.json();
+    return (
+      summaryPayload?.originalimage?.source ||
+      summaryPayload?.thumbnail?.source ||
+      DEFAULT_POSTER_DATA_URI
+    );
+  } catch {
+    return DEFAULT_POSTER_DATA_URI;
+  }
 }
 
 function formatScore(score) {

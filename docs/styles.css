@@ -172,8 +172,10 @@ img {
 }
 
 .topbar-nav a:hover,
-.topbar-nav a:focus-visible {
+.topbar-nav a:focus-visible,
+.topbar-nav a.is-active {
   background: rgba(255, 255, 255, 0.12);
+  color: #fff;
 }
 
 .session-pill {
@@ -207,6 +209,22 @@ img {
 .status-pill:hover,
 .status-pill:focus-visible {
   transform: translateY(-1px);
+}
+
+.page-view {
+  display: none;
+}
+
+.page-view.is-active {
+  display: block;
+}
+
+.watchlist-panel {
+  margin-bottom: 1rem;
+}
+
+.dashboard-grid {
+  margin-top: 0;
 }
 
 .hero-grid {
