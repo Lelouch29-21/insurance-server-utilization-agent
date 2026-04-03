@@ -16,12 +16,13 @@ GitHub Pages workflow in
 - Public profile browsing so you can open other people's lists
 - Friend graph actions: add/remove friends and compare shared titles
 - Community boards with channels, linked titles, likes, and comments
-- Anti-silo recommendation rail that blends friend shelves, outer-circle picks,
-  genre novelty, and IMDb/chart signals
+- Taste Match recommendation rail that blends friend shelves, outer-circle
+  picks, genre novelty, and IMDb/chart signals
 - Live TV chart rail powered by the TVMaze API with direct IMDb title links
 - Custom title composer for adding new movies or shows that are not in the seed
   catalog
-- Responsive "Pretext" style UI with text-forward editorial cards
+- MAL-inspired blue/white UI with poster cards, explicit Watchlist actions, and
+  a cursor-through-text hover effect powered by `@chenglou/pretext`
 
 ## Demo accounts
 

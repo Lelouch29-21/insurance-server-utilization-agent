@@ -38,16 +38,16 @@
         <section class="hero-grid" aria-label="Product overview and session">
           <article class="hero-panel hero-copy">
             <p class="eyebrow">MAL-style tracking for shows + movies</p>
-            <h1>Break the taste silo. Watch what your circles keep missing.</h1>
-            <p class="hero-text">
-              Track every TV show and film, browse public friend lists, post in
-              spoiler-safe boards, and get cross-circle recommendations that
-              mix IMDb signals, friend activity, and live TV chart momentum.
+            <h1 class="flow-copy">Track anime, TV, and movies like a social watchlist.</h1>
+            <p class="hero-text flow-copy">
+              Track everything you watch, open friends' lists, post in
+              spoiler-safe boards, and find recommendations that mix IMDb
+              scores, friend activity, and live TV chart momentum.
             </p>
 
             <div class="hero-actions">
-              <a class="primary-button" href="#discover">Explore discovery</a>
-              <a class="secondary-button" href="#people">Browse people</a>
+              <a class="primary-button" href="#library">Open watchlist</a>
+              <a class="secondary-button" href="#discover">Explore titles</a>
             </div>
 
             <div class="hero-brief-grid">
@@ -56,8 +56,8 @@
                 <strong>Friend shelves + public lists</strong>
               </article>
               <article class="mini-brief">
-                <span>Anti-silo</span>
-                <strong>Taste-bridge picks and bubble alerts</strong>
+                <span>Recommendations</span>
+                <strong>Cross-genre picks from friends + outer circles</strong>
               </article>
               <article class="mini-brief">
                 <span>Streaming intel</span>
@@ -70,7 +70,7 @@
             <section class="auth-card" id="auth-card">
               <div class="section-head">
                 <p class="eyebrow">Login</p>
-                <h2>Enter the community.</h2>
+                <h2 class="flow-copy">Enter the community.</h2>
               </div>
 
               <div class="auth-toggle" role="tablist" aria-label="Auth mode">
@@ -136,12 +136,12 @@
                 <div class="avatar-xl" id="profile-avatar">PW</div>
                 <div>
                   <p class="eyebrow">Signed in as</p>
-                  <h2 id="profile-name">Pretext user</h2>
+                  <h2 class="flow-copy" id="profile-name">Pretext user</h2>
                   <p class="muted-copy" id="profile-meta">@handle · city</p>
                 </div>
               </div>
 
-              <p class="profile-bio" id="profile-bio"></p>
+              <p class="profile-bio flow-copy" id="profile-bio"></p>
 
               <div class="session-stats">
                 <article class="session-stat">
@@ -153,7 +153,7 @@
                   <strong id="hero-friend-count">0</strong>
                 </article>
                 <article class="session-stat">
-                  <span>Bridge score</span>
+                  <span>Taste Match</span>
                   <strong id="hero-bridge-score">0</strong>
                 </article>
               </div>
@@ -172,22 +172,22 @@
           <article class="metric-card">
             <span class="metric-label">Total titles tracked</span>
             <strong class="metric-value" id="metric-total">0</strong>
-            <p class="metric-copy">Your personal MAL-style list across TV and film.</p>
+            <p class="metric-copy flow-copy">Your personal MAL-style list across TV and film.</p>
           </article>
           <article class="metric-card">
             <span class="metric-label">Friend circle</span>
             <strong class="metric-value" id="metric-friends">0</strong>
-            <p class="metric-copy">People whose shelves and boards you follow.</p>
+            <p class="metric-copy flow-copy">People whose shelves and boards you follow.</p>
           </article>
           <article class="metric-card">
             <span class="metric-label">Watch-status spread</span>
             <strong class="metric-value" id="metric-active">0</strong>
-            <p class="metric-copy">Currently watching + plan-to-watch entries.</p>
+            <p class="metric-copy flow-copy">Currently watching + watchlist entries.</p>
           </article>
           <article class="metric-card">
-            <span class="metric-label">Silo breaker index</span>
+            <span class="metric-label">Taste Match score</span>
             <strong class="metric-value" id="metric-bridge">0</strong>
-            <p class="metric-copy">Higher means your queue spans more genres and circles.</p>
+            <p class="metric-copy flow-copy">Higher means your queue spans more genres and circles.</p>
           </article>
         </section>
 
@@ -195,13 +195,13 @@
           <article class="panel discovery-panel">
             <div class="section-head">
               <div>
-                <p class="eyebrow">Cross-circle discovery</p>
-                <h2>Anti-silo recommendations</h2>
+                <p class="eyebrow">Recommendations</p>
+                <h2 class="flow-copy">Top picks from friends and new circles</h2>
               </div>
-              <p class="context-chip" id="discovery-chip">Taste bridge</p>
+              <p class="context-chip" id="discovery-chip">Taste Match</p>
             </div>
 
-            <p class="panel-copy" id="discovery-summary"></p>
+            <p class="panel-copy flow-copy" id="discovery-summary"></p>
             <div class="bridge-grid" id="discovery-grid"></div>
           </article>
 
@@ -209,14 +209,14 @@
             <div class="section-head">
               <div>
                 <p class="eyebrow">TV charts + IMDb</p>
-                <h2>Live TVMaze chart pulse</h2>
+                <h2 class="flow-copy">Live TVMaze chart pulse</h2>
               </div>
               <button class="ghost-button compact" id="refresh-chart-button" type="button">
                 Refresh chart
               </button>
             </div>
 
-            <p class="panel-copy" id="chart-status">
+            <p class="panel-copy flow-copy" id="chart-status">
               Pulling a fresh TV chart and attaching IMDb links where available.
             </p>
             <div class="chart-grid" id="chart-grid"></div>
@@ -226,8 +226,8 @@
         <section class="panel" id="library" aria-label="My watch list">
           <div class="section-head">
             <div>
-              <p class="eyebrow">My list</p>
-              <h2>Track every TV show and movie</h2>
+              <p class="eyebrow">Watchlist</p>
+              <h2 class="flow-copy">Track every TV show and movie</h2>
             </div>
             <div class="filter-row" role="tablist" aria-label="Shelf filters">
               <button class="toggle-chip is-active" type="button" data-shelf-filter="all">
@@ -240,7 +240,7 @@
                 Completed
               </button>
               <button class="toggle-chip" type="button" data-shelf-filter="Planning">
-                Planning
+                Watchlist
               </button>
               <button class="toggle-chip" type="button" data-shelf-filter="Dropped">
                 Dropped
@@ -271,7 +271,7 @@
               Status
               <select id="status-input">
                 <option value="Watching">Watching</option>
-                <option value="Planning">Planning</option>
+                <option value="Planning">Watchlist</option>
                 <option value="Completed">Completed</option>
                 <option value="Paused">Paused</option>
                 <option value="Dropped">Dropped</option>
@@ -308,7 +308,7 @@
             <div class="section-head">
               <div>
                 <p class="eyebrow">People</p>
-                <h2>Find friends and open their shelves</h2>
+                <h2 class="flow-copy">Find friends and open their shelves</h2>
               </div>
               <p class="context-chip" id="people-count-label">0 profiles</p>
             </div>
@@ -319,7 +319,7 @@
             <div class="section-head">
               <div>
                 <p class="eyebrow">Public profile</p>
-                <h2 id="public-profile-title">Open a user list</h2>
+                <h2 class="flow-copy" id="public-profile-title">Open a user list</h2>
               </div>
               <button class="ghost-button compact" id="follow-selected-button" type="button">
                 Add friend
@@ -334,7 +334,7 @@
           <div class="section-head">
             <div>
               <p class="eyebrow">Community boards</p>
-              <h2>Post watch-room threads and spoiler-safe debates</h2>
+              <h2 class="flow-copy">Post watch-room threads and spoiler-safe debates</h2>
             </div>
             <p class="context-chip" id="board-count-label">0 threads</p>
           </div>
@@ -345,7 +345,7 @@
               <select id="board-channel-input">
                 <option value="Spoiler-safe picks">Spoiler-safe picks</option>
                 <option value="Weekend watch party">Weekend watch party</option>
-                <option value="Taste bridge">Taste bridge</option>
+                <option value="Taste Match">Taste Match</option>
                 <option value="Hot takes">Hot takes</option>
               </select>
             </label>
@@ -372,7 +372,7 @@
               <textarea
                 id="board-body-input"
                 rows="3"
-                placeholder="Ask for recs, announce a watch party, or explain a taste bridge..."
+                placeholder="Ask for recs, announce a watch party, or explain why a title fits..."
                 required
               ></textarea>
             </label>

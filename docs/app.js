@@ -1,8 +1,11 @@
-const STORE_KEY = "pretext-watchboard-store-v1";
-const SESSION_KEY = "pretext-watchboard-session-v1";
+const STORE_KEY = "pretext-watchboard-store-v2";
+const SESSION_KEY = "pretext-watchboard-session-v2";
+const PRETEXT_MODULE_URL = "https://esm.sh/@chenglou/pretext@0.0.4?bundle";
 const TVMAZE_PAGES = [0, 1];
 const DEFAULT_AUTH_HANDLE = "nova";
 const DEFAULT_AUTH_PASSWORD = "nova";
+const IMAGE_FALLBACK_BASE =
+  "https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=900&q=80";
 
 const SEED_CATALOG = [
   {
@@ -63,7 +66,7 @@ const SEED_CATALOG = [
     source: "Netflix",
     poster: "",
     summary:
-      "A sharp revenge odyssey that helps anime fans bridge into prestige animation and historical drama circles.",
+      "A sharp revenge odyssey that helps anime fans cross into prestige animation and historical drama circles.",
   },
   {
     id: "attack-on-titan",
@@ -78,7 +81,7 @@ const SEED_CATALOG = [
     source: "Crunchyroll",
     poster: "",
     summary:
-      "A long-run anime event with huge public discourse and a deep recommendation bridge into darker fantasy series.",
+      "A long-run anime event with huge public discourse and a deep recommendation trail into darker fantasy series.",
   },
   {
     id: "the-white-lotus",
@@ -153,7 +156,7 @@ const SEED_CATALOG = [
     source: "Netflix",
     poster: "",
     summary:
-      "A live-action anime bridge title for friends who need a softer on-ramp into shonen fandom.",
+      "A live-action anime gateway for friends who need a softer on-ramp into shonen fandom.",
   },
   {
     id: "past-lives",
@@ -183,7 +186,7 @@ const SEED_CATALOG = [
     source: "A24",
     poster: "",
     summary:
-      "Multiverse maximalism with enough heart to bridge indie fans and blockbuster-only friend groups.",
+      "Multiverse maximalism with enough heart to connect indie fans and blockbuster-only friend groups.",
   },
   {
     id: "oppenheimer",
@@ -317,7 +320,7 @@ const SEED_USERS = [
         status: "Completed",
         score: 9.1,
         progress: "Season 1",
-        note: "Best bridge pick for animation skeptics.",
+        note: "Best crossover pick for animation skeptics.",
         updatedAt: "2026-01-20T09:00:00.000Z",
       },
       {
@@ -389,7 +392,7 @@ const SEED_USERS = [
     password: "zoya",
     city: "Delhi",
     bio: "Moves between anime, slow cinema, and social satire so the group feed never gets trapped in one algorithm lane.",
-    vibe: "Slow-cinema bridge builder",
+    vibe: "Slow-cinema scout",
     friends: ["user-nova", "user-arya"],
     shelf: [
       {
@@ -517,7 +520,7 @@ const SEED_USERS = [
         status: "Completed",
         score: 8.9,
         progress: "Finished",
-        note: "Still the best multiverse bridge rec.",
+        note: "Still the best multiverse crossover rec.",
         updatedAt: "2026-03-08T08:00:00.000Z",
       },
       {
@@ -544,10 +547,10 @@ const SEED_BOARDS = [
   {
     id: "board-shogun",
     authorId: "user-nova",
-    channel: "Taste bridge",
+    channel: "Taste Match",
     title: "Need one historical epic for friends who only watch sci-fi",
     body:
-      "Shogun worked because it still has strategy, world-building, and big theory energy. What else bridges that exact gap?",
+      "Shogun worked because it still has strategy, world-building, and big theory energy. What else fits that exact gap?",
     linkedTitleId: "shogun",
     likes: ["user-milo", "user-zoya"],
     createdAt: "2026-03-30T07:30:00.000Z",
@@ -580,7 +583,7 @@ const SEED_BOARDS = [
       {
         id: "comment-b1",
         authorId: "user-milo",
-        body: "Across the Spider-Verse is the obvious bridge movie.",
+        body: "Across the Spider-Verse is the obvious crossover movie.",
         createdAt: "2026-03-27T14:40:00.000Z",
       },
     ],
@@ -641,7 +644,7 @@ const FALLBACK_CHART = [
     source: "Fallback chart",
     poster: "",
     summary:
-      "Fallback chart pick that bridges prestige drama and action-heavy watch circles.",
+      "Fallback chart pick that connects prestige drama and action-heavy watch circles.",
   },
   {
     id: "chart-last-of-us",
@@ -693,6 +696,15 @@ const appState = {
   chartStatusText:
     "Pulling a fresh TV chart from TVMaze and attaching IMDb links where available.",
 };
+
+const pretextRuntime = {
+  api: null,
+  loadingPromise: null,
+  isReady: false,
+  scheduledFrame: 0,
+};
+
+const pretextLayoutStore = new WeakMap();
 
 const elements = {
   sessionAction: document.querySelector("#session-action"),
@@ -761,6 +773,9 @@ function initApp() {
   syncAuthModeControls();
   bindEventListeners();
   renderApp();
+  loadPretextRuntime().catch(() => {
+    // The UI still works without Pretext; only the cursor-through-text effect degrades.
+  });
   loadLiveTvCharts().catch(() => {
     // Fallback chart is already rendered if TVMaze is unavailable.
   });
@@ -896,6 +911,10 @@ function bindEventListeners() {
   });
 
   elements.boardGrid.addEventListener("submit", handleBoardCommentSubmit);
+
+  window.addEventListener("resize", () => {
+    queuePretextRender();
+  });
 }
 
 function renderApp() {
@@ -907,6 +926,7 @@ function renderApp() {
   renderPeople();
   renderPublicProfile();
   renderBoards();
+  queuePretextRender();
 }
 
 function renderSessionPanel() {
@@ -968,11 +988,12 @@ function renderDiscovery() {
 
   elements.discoverySummary.textContent = activeUser
     ? buildDiscoverySummary(activeUser, discoveryCards)
-    : "Sign in to get friend-aware recs that deliberately blend your comfort genres with outer-circle titles and IMDb-backed crowd signals.";
+    : "Sign in to get friend-aware recs that blend your comfort genres with titles from outside your usual circle, backed by IMDb scores and watch activity.";
 
   elements.discoveryGrid.innerHTML = discoveryCards
     .map((card) => renderDiscoveryCard(card))
     .join("");
+  queuePretextRender();
 }
 
 function renderDiscoveryCard(card) {
@@ -989,25 +1010,25 @@ function renderDiscoveryCard(card) {
           <p class="meta-mono">${escapeHtml(card.item.kind)} · ${escapeHtml(
             String(card.item.year ?? "")
           )} · IMDb ${formatScore(card.item.imdbScore)}</p>
-          <h3>${escapeHtml(card.item.title)}</h3>
+          <h3 class="flow-copy">${escapeHtml(card.item.title)}</h3>
           <p class="meta-line">${escapeHtml(supporterCopy)}</p>
         </div>
       </div>
       <div class="chip-row">
-        <span class="status-pill orange">Bridge +${Math.round(card.bridgeScore)}</span>
+        <span class="status-pill orange">Taste Match ${Math.round(card.bridgeScore)}</span>
         <span class="status-pill ${statusToneClass[card.friendStatus] || ""}">
-          ${escapeHtml(card.friendStatus)}
+          ${escapeHtml(displayShelfStatus(card.friendStatus))}
         </span>
         <a class="imdb-link" href="${escapeHtml(
           imdbUrlForItem(card.item)
         )}" target="_blank" rel="noreferrer">IMDb</a>
       </div>
-      <p class="list-note">${escapeHtml(card.reason)}</p>
+      <p class="list-note flow-copy">${escapeHtml(card.reason)}</p>
       <div class="card-actions">
         <button class="mini-action" type="button" data-discovery-save="${escapeHtml(
           card.item.id
         )}">
-          Add to Planning
+          Add to Watchlist
         </button>
       </div>
     </article>
@@ -1020,9 +1041,10 @@ function renderChart() {
   if (appState.chartItems.length === 0) {
     elements.chartGrid.innerHTML = `
       <article class="chart-card">
-        <p class="chart-empty">No chart cards available right now. Try refreshing the TVMaze feed.</p>
+        <p class="chart-empty flow-copy">No chart cards available right now. Try refreshing the TVMaze feed.</p>
       </article>
     `;
+    queuePretextRender();
     return;
   }
 
@@ -1037,7 +1059,7 @@ function renderChart() {
               <p class="meta-mono">${escapeHtml(item.kind)} · ${escapeHtml(
                 String(item.year ?? "")
               )}</p>
-              <h3>${escapeHtml(item.title)}</h3>
+              <h3 class="flow-copy">${escapeHtml(item.title)}</h3>
               <p class="meta-line">${escapeHtml(item.source)} · IMDb ${formatScore(
                 item.imdbScore
               )}</p>
@@ -1054,18 +1076,19 @@ function renderChart() {
               imdbUrlForItem(item)
             )}" target="_blank" rel="noreferrer">IMDb</a>
           </div>
-          <p class="list-note">${escapeHtml(item.summary)}</p>
+          <p class="list-note flow-copy">${escapeHtml(item.summary)}</p>
           <div class="card-actions">
             <button class="mini-action" type="button" data-chart-save="${escapeHtml(
               item.id
             )}">
-              Save to Planning
+              Save to Watchlist
             </button>
           </div>
         </article>
       `
     )
     .join("");
+  queuePretextRender();
 }
 
 function renderLibrary() {
@@ -1074,11 +1097,12 @@ function renderLibrary() {
   if (!activeUser) {
     elements.libraryGrid.innerHTML = `
       <article class="public-summary">
-        <p class="public-empty">
+        <p class="public-empty flow-copy">
           Sign in with a demo handle to build your own shelf, score titles, and publish your list to friends.
         </p>
       </article>
     `;
+    queuePretextRender();
     return;
   }
 
@@ -1099,11 +1123,12 @@ function renderLibrary() {
   if (entries.length === 0) {
     elements.libraryGrid.innerHTML = `
       <article class="public-summary">
-        <p class="public-empty">
+        <p class="public-empty flow-copy">
           Nothing in this shelf filter yet. Add a TV show or film above to keep your list current.
         </p>
       </article>
     `;
+    queuePretextRender();
     return;
   }
 
@@ -1122,7 +1147,7 @@ function renderLibrary() {
               <p class="meta-mono">${escapeHtml(item.kind)} · ${escapeHtml(
                 String(item.year ?? "")
               )}</p>
-              <h3>${escapeHtml(item.title)}</h3>
+              <h3 class="flow-copy">${escapeHtml(item.title)}</h3>
               <p class="meta-line">Your score ${formatScore(
                 entry.score
               )} · IMDb ${formatScore(item.imdbScore)} · ${escapeHtml(
@@ -1131,7 +1156,7 @@ function renderLibrary() {
             </div>
           </div>
           <div class="chip-row">
-            <span class="status-pill ${tone}">${escapeHtml(entry.status)}</span>
+            <span class="status-pill ${tone}">${escapeHtml(displayShelfStatus(entry.status))}</span>
             <span class="status-pill">${escapeHtml(
               item.genres.slice(0, 2).join(" · ") || "Unsorted"
             )}</span>
@@ -1139,7 +1164,7 @@ function renderLibrary() {
               imdbUrlForItem(item)
             )}" target="_blank" rel="noreferrer">IMDb</a>
           </div>
-          <p class="list-note">${escapeHtml(entry.note || item.summary)}</p>
+          <p class="list-note flow-copy">${escapeHtml(entry.note || item.summary)}</p>
           <label class="field-label" for="status-${escapeHtml(item.id)}">
             Update status
             <select id="status-${escapeHtml(
@@ -1162,6 +1187,7 @@ function renderLibrary() {
       `;
     })
     .join("");
+  queuePretextRender();
 }
 
 function renderPeople() {
@@ -1192,9 +1218,10 @@ function renderPeople() {
   if (profiles.length === 0) {
     elements.peopleGrid.innerHTML = `
       <article class="person-card">
-        <p class="public-empty">No public profiles yet.</p>
+        <p class="public-empty flow-copy">No public profiles yet.</p>
       </article>
     `;
+    queuePretextRender();
     return;
   }
 
@@ -1212,11 +1239,11 @@ function renderPeople() {
               <p class="meta-mono">@${escapeHtml(user.handle)} · ${escapeHtml(
                 user.city
               )}</p>
-              <h3 class="profile-name">${escapeHtml(user.name)}</h3>
+              <h3 class="profile-name flow-copy">${escapeHtml(user.name)}</h3>
             </div>
           </div>
-          <p class="list-note">${escapeHtml(user.bio)}</p>
-          <p class="list-note">${escapeHtml(shelfPreview)}</p>
+          <p class="list-note flow-copy">${escapeHtml(user.bio)}</p>
+          <p class="list-note flow-copy">${escapeHtml(shelfPreview)}</p>
           <div class="chip-row">
             <span class="friend-tag">${isFriend ? "Friend" : "Public profile"}</span>
             <span class="status-pill">${user.shelf.length} titles</span>
@@ -1246,6 +1273,7 @@ function renderPeople() {
       `;
     })
     .join("");
+  queuePretextRender();
 }
 
 function renderPublicProfile() {
@@ -1258,9 +1286,10 @@ function renderPublicProfile() {
     elements.followSelectedButton.classList.add("is-hidden");
     elements.publicProfile.innerHTML = `
       <article class="public-summary">
-        <p class="public-empty">Pick someone from the people panel to inspect their public shelf.</p>
+        <p class="public-empty flow-copy">Pick someone from the people panel to inspect their public shelf.</p>
       </article>
     `;
+    queuePretextRender();
     return;
   }
 
@@ -1273,7 +1302,7 @@ function renderPublicProfile() {
     : "Add friend";
 
   const bridgeLabel = activeUser
-    ? `${sharedTitleCount(activeUser, selectedUser)} shared titles`
+          ? `${sharedTitleCount(activeUser, selectedUser)} shared titles`
     : "Sign in to compare overlap";
 
   const catalogMap = catalogIndex();
@@ -1294,7 +1323,7 @@ function renderPublicProfile() {
               <p class="meta-mono">${escapeHtml(item.kind)} · ${escapeHtml(
                 String(item.year ?? "")
               )}</p>
-              <h3>${escapeHtml(item.title)}</h3>
+              <h3 class="flow-copy">${escapeHtml(item.title)}</h3>
               <p class="meta-line">@${escapeHtml(
                 selectedUser.handle
               )} score ${formatScore(entry.score)} · IMDb ${formatScore(
@@ -1303,7 +1332,7 @@ function renderPublicProfile() {
             </div>
           </div>
           <div class="chip-row">
-            <span class="status-pill ${tone}">${escapeHtml(entry.status)}</span>
+            <span class="status-pill ${tone}">${escapeHtml(displayShelfStatus(entry.status))}</span>
             <span class="status-pill">${escapeHtml(
               item.genres.slice(0, 2).join(" · ") || "Fresh pick"
             )}</span>
@@ -1311,14 +1340,14 @@ function renderPublicProfile() {
               imdbUrlForItem(item)
             )}" target="_blank" rel="noreferrer">IMDb</a>
           </div>
-          <p class="list-note">${escapeHtml(entry.note || item.summary)}</p>
+          <p class="list-note flow-copy">${escapeHtml(entry.note || item.summary)}</p>
           <div class="card-actions">
             <button
               class="mini-action"
               type="button"
               data-public-borrow="${escapeHtml(item.id)}"
             >
-              Borrow this pick
+              Add to Watchlist
             </button>
           </div>
         </article>
@@ -1334,26 +1363,27 @@ function renderPublicProfile() {
           <p class="meta-mono">@${escapeHtml(selectedUser.handle)} · ${escapeHtml(
             selectedUser.city
           )}</p>
-          <h3 class="public-name">${escapeHtml(selectedUser.name)}</h3>
+          <h3 class="public-name flow-copy">${escapeHtml(selectedUser.name)}</h3>
           <p class="meta-line">${escapeHtml(selectedUser.vibe)} · ${escapeHtml(
             bridgeLabel
           )}</p>
         </div>
       </div>
-      <p class="list-note">${escapeHtml(selectedUser.bio)}</p>
+      <p class="list-note flow-copy">${escapeHtml(selectedUser.bio)}</p>
       <div class="chip-row">
         <span class="friend-tag">${isFriend ? "Your friend" : "Public profile"}</span>
         <span class="status-pill">${selectedUser.shelf.length} titles</span>
-        <span class="status-pill orange">${calculateBridgeScore(selectedUser)} bridge</span>
+        <span class="status-pill orange">Taste Match ${calculateBridgeScore(selectedUser)}</span>
       </div>
     </article>
     <div class="public-list">
       ${
         listMarkup ||
-        `<article class="public-summary"><p class="public-empty">This shelf is empty.</p></article>`
+        `<article class="public-summary"><p class="public-empty flow-copy">This shelf is empty.</p></article>`
       }
     </div>
   `;
+  queuePretextRender();
 }
 
 function renderBoards() {
@@ -1370,9 +1400,10 @@ function renderBoards() {
   if (boards.length === 0) {
     elements.boardGrid.innerHTML = `
       <article class="thread-card">
-        <p class="public-empty">No threads yet. Post the first board prompt above.</p>
+        <p class="public-empty flow-copy">No threads yet. Post the first board prompt above.</p>
       </article>
     `;
+    queuePretextRender();
     return;
   }
 
@@ -1398,7 +1429,7 @@ function renderBoards() {
                 <p class="meta-mono">@${escapeHtml(
                   commentAuthor?.handle || "ghost"
                 )} · ${escapeHtml(formatDateLabel(comment.createdAt))}</p>
-                <p>${escapeHtml(comment.body)}</p>
+                <p class="flow-copy">${escapeHtml(comment.body)}</p>
               </div>
             </div>
           `;
@@ -1415,10 +1446,10 @@ function renderBoards() {
               <p class="thread-meta">${escapeHtml(board.channel)} · @${escapeHtml(
                 author?.handle || "ghost"
               )} · ${escapeHtml(formatDateLabel(board.createdAt))}</p>
-              <h3>${escapeHtml(board.title)}</h3>
+              <h3 class="flow-copy">${escapeHtml(board.title)}</h3>
             </div>
           </div>
-          <p class="board-body">${escapeHtml(board.body)}</p>
+          <p class="board-body flow-copy">${escapeHtml(board.body)}</p>
           ${
             linkedTitle
               ? `
@@ -1452,7 +1483,7 @@ function renderBoards() {
                     data-board-id="${escapeHtml(board.id)}"
                     data-title-id="${escapeHtml(linkedTitle.id)}"
                   >
-                    Pin linked title
+                    Add title to Watchlist
                   </button>
                 `
                 : ""
@@ -1470,7 +1501,7 @@ function renderBoards() {
           <div class="thread-comments">
             ${
               commentsMarkup ||
-              `<p class="public-empty">No comments yet. Start the thread.</p>`
+              `<p class="public-empty flow-copy">No comments yet. Start the thread.</p>`
             }
             <form class="comment-form" data-comment-form="true" data-board-id="${escapeHtml(
               board.id
@@ -1483,6 +1514,7 @@ function renderBoards() {
       `;
     })
     .join("");
+  queuePretextRender();
 }
 
 async function loadLiveTvCharts() {
@@ -1593,7 +1625,7 @@ function buildDiscoveryCards(activeUser) {
         friendStatus: "Planning",
         supporters: [],
         reason:
-          "Guest preview pick based on chart momentum and IMDb score. Sign in to replace this with friend-aware taste-bridge recommendations.",
+          "Guest preview pick based on chart momentum and IMDb score. Sign in to replace this with friend-aware recommendations from outside your usual circle.",
       }));
   }
 
@@ -1682,7 +1714,7 @@ function buildDiscoverySummary(activeUser, cards) {
 
   return `Your shelf leans ${favoriteGenres.join(
     ", "
-  ) || "multi-genre"}. This rail mixes ${friendSignals} friend-backed picks with ${outerSignals} outer-circle signals so your queue does not collapse into one recommendation bubble.`;
+  ) || "multi-genre"}. This rail mixes ${friendSignals} friend-backed picks with ${outerSignals} outer-circle signals so your watchlist does not collapse into one recommendation bubble.`;
 }
 
 function buildDiscoveryReason({
@@ -1983,11 +2015,11 @@ function saveTitleToShelf(titleId, status) {
     status,
     score: Number(item.imdbScore ?? 8),
     progress: defaultProgressLabel(status),
-    note: `Borrowed from discovery, charts, or a friend's public list.`,
+    note: `Added from recommendations, charts, or a friend's public list.`,
   });
   persistStore();
   renderApp();
-  showToast(`${item.title} saved to ${activeUser.name}'s ${status.toLowerCase()} shelf.`);
+  showToast(`${item.title} saved to ${activeUser.name}'s ${displayShelfStatus(status).toLowerCase()}.`);
 }
 
 function toggleFriend(targetUserId) {
@@ -2176,20 +2208,25 @@ function renderStatusOptions(selectedStatus) {
       (status) => `
         <option value="${escapeHtml(status)}" ${
           status === selectedStatus ? "selected" : ""
-        }>${escapeHtml(status)}</option>
+        }>${escapeHtml(displayShelfStatus(status))}</option>
       `
     )
     .join("");
 }
 
 function renderPoster(item) {
-  const posterMarkup = item.poster
-    ? `<img src="${escapeHtml(item.poster)}" alt="${escapeHtml(
-        item.title
-      )} poster" loading="lazy" />`
-    : `<div class="poster-fallback">${escapeHtml(posterInitials(item.title))}</div>`;
-
-  return `<div class="poster-frame">${posterMarkup}</div>`;
+  const posterUrl = posterUrlForItem(item);
+  return `
+    <div class="poster-frame">
+      <img
+        src="${escapeHtml(posterUrl)}"
+        alt="${escapeHtml(item.title)} poster"
+        loading="lazy"
+        referrerpolicy="no-referrer"
+        onerror="this.onerror=null;this.src='${escapeHtml(IMAGE_FALLBACK_BASE)}';"
+      />
+    </div>
+  `;
 }
 
 function upsertShelfEntry(user, titleId, payload) {
@@ -2421,11 +2458,15 @@ function generateTitleId(title) {
 function defaultProgressLabel(status) {
   return {
     Watching: "In progress",
-    Planning: "Queue",
+    Planning: "Watchlist queue",
     Completed: "Finished",
     Paused: "On pause",
     Dropped: "Dropped",
   }[status] || "Tracked";
+}
+
+function displayShelfStatus(status) {
+  return status === "Planning" ? "Watchlist" : status;
 }
 
 function initialsForName(name) {
@@ -2437,13 +2478,13 @@ function initialsForName(name) {
     .join("") || "PW";
 }
 
-function posterInitials(title) {
-  const words = String(title || "")
-    .split(/[\s:-]+/)
-    .filter(Boolean)
-    .slice(0, 3)
-    .map((word) => word[0].toUpperCase());
-  return words.join("") || "PW";
+function posterUrlForItem(item) {
+  if (item.poster) {
+    return item.poster;
+  }
+
+  const seed = encodeURIComponent(item.id || item.title || "watchboard");
+  return `https://picsum.photos/seed/${seed}/420/620`;
 }
 
 function formatScore(score) {
@@ -2498,6 +2539,151 @@ function showToast(message) {
   showToast.hideTimer = window.setTimeout(() => {
     elements.toast.classList.add("is-hidden");
   }, 2800);
+}
+
+async function loadPretextRuntime() {
+  if (pretextRuntime.api) {
+    return pretextRuntime.api;
+  }
+  if (pretextRuntime.loadingPromise) {
+    return pretextRuntime.loadingPromise;
+  }
+
+  pretextRuntime.loadingPromise = import(PRETEXT_MODULE_URL)
+    .then((module) => {
+      pretextRuntime.api = module;
+      pretextRuntime.isReady = true;
+      queuePretextRender();
+      return module;
+    })
+    .catch((error) => {
+      pretextRuntime.isReady = false;
+      throw error;
+    });
+
+  return pretextRuntime.loadingPromise;
+}
+
+function queuePretextRender() {
+  if (!pretextRuntime.isReady) {
+    return;
+  }
+  window.cancelAnimationFrame(pretextRuntime.scheduledFrame);
+  pretextRuntime.scheduledFrame = window.requestAnimationFrame(() => {
+    hydratePretextCopies();
+  });
+}
+
+function hydratePretextCopies() {
+  if (!pretextRuntime.isReady || !pretextRuntime.api) {
+    return;
+  }
+
+  document.querySelectorAll(".flow-copy").forEach((node) => {
+    decoratePretextFlowCopy(node);
+  });
+}
+
+function decoratePretextFlowCopy(node) {
+  const sourceText = node.dataset.flowSource || node.textContent || "";
+  node.dataset.flowSource = sourceText;
+
+  const availableWidth = Math.floor(
+    node.clientWidth || node.parentElement?.clientWidth || 0
+  );
+  if (!sourceText.trim() || availableWidth < 140) {
+    node.textContent = sourceText;
+    node.classList.remove("is-pretext-ready");
+    pretextLayoutStore.delete(node);
+    return;
+  }
+
+  const style = window.getComputedStyle(node);
+  const font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  const lineHeight =
+    Number.parseFloat(style.lineHeight) ||
+    Number.parseFloat(style.fontSize) * 1.55 ||
+    24;
+
+  const { prepareWithSegments, layoutWithLines } = pretextRuntime.api;
+  const prepared = prepareWithSegments(sourceText, font);
+  const { lines } = layoutWithLines(prepared, availableWidth, lineHeight);
+
+  if (!lines.length) {
+    node.textContent = sourceText;
+    node.classList.remove("is-pretext-ready");
+    pretextLayoutStore.delete(node);
+    return;
+  }
+
+  node.innerHTML = lines
+    .map((line, lineIndex) => {
+      const text = line.text || " ";
+      const graphemes = Array.from(text);
+      const charMarkup = graphemes
+        .map((grapheme, charIndex) => {
+          const renderedChar = grapheme === " " ? "&nbsp;" : escapeHtml(grapheme);
+          return `<span class="flow-grapheme" data-flow-char="${charIndex}">${renderedChar}</span>`;
+        })
+        .join("");
+
+      return `<span class="flow-line" data-flow-line="${lineIndex}">${charMarkup}</span>`;
+    })
+    .join("");
+
+  node.classList.add("is-pretext-ready");
+  pretextLayoutStore.set(node, {
+    lineHeight,
+    lineWidths: lines.map((line) => Math.max(line.width, 1)),
+    lineLengths: lines.map((line) => Math.max(Array.from(line.text || "").length, 1)),
+  });
+
+  node.onmousemove = (event) => updatePretextCursor(node, event);
+  node.onmouseleave = () => clearPretextCursor(node);
+}
+
+function updatePretextCursor(node, event) {
+  const layoutState = pretextLayoutStore.get(node);
+  if (!layoutState) {
+    return;
+  }
+
+  const bounds = node.getBoundingClientRect();
+  const lineIndex = clampNumber(
+    Math.floor((event.clientY - bounds.top) / layoutState.lineHeight),
+    0,
+    layoutState.lineWidths.length - 1
+  );
+  const lineNode = node.querySelector(`[data-flow-line="${lineIndex}"]`);
+  if (!lineNode) {
+    return;
+  }
+
+  const relativeX = clampNumber(event.clientX - bounds.left, 0, bounds.width);
+  const lineWidth = layoutState.lineWidths[lineIndex];
+  const charCount = layoutState.lineLengths[lineIndex];
+  const centerIndex = clampNumber(
+    Math.round((relativeX / lineWidth) * (charCount - 1)),
+    0,
+    charCount - 1
+  );
+
+  clearPretextCursor(node);
+  Array.from(lineNode.children).forEach((charNode, charIndex) => {
+    if (Math.abs(charIndex - centerIndex) <= 2) {
+      charNode.classList.add("is-flow-active");
+    }
+  });
+}
+
+function clearPretextCursor(node) {
+  node.querySelectorAll(".is-flow-active").forEach((charNode) => {
+    charNode.classList.remove("is-flow-active");
+  });
+}
+
+function clampNumber(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
 initApp();
