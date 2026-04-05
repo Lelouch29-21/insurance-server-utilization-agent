@@ -30,10 +30,10 @@ const DEFAULT_POSTER_DATA_URI =
   "data:image/svg+xml;charset=UTF-8," +
   encodeURIComponent(`
     <svg xmlns="http://www.w3.org/2000/svg" width="420" height="620" viewBox="0 0 420 620">
-      <rect width="420" height="620" rx="24" fill="#11111B"/>
-      <rect x="22" y="22" width="376" height="576" rx="22" fill="#1E1E2E" stroke="#313244" stroke-width="4"/>
-      <text x="210" y="295" text-anchor="middle" font-family="Arial, sans-serif" font-size="44" font-weight="700" fill="#89B4FA">No Poster</text>
-      <text x="210" y="348" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#CDD6F4">Add a title to begin</text>
+      <rect width="420" height="620" rx="24" fill="#2E3440"/>
+      <rect x="22" y="22" width="376" height="576" rx="22" fill="#3B4252" stroke="#4C566A" stroke-width="4"/>
+      <text x="210" y="295" text-anchor="middle" font-family="Arial, sans-serif" font-size="44" font-weight="700" fill="#88C0D0">No Poster</text>
+      <text x="210" y="348" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#D8DEE9">Add a title to begin</text>
     </svg>
   `);
 
@@ -1903,7 +1903,7 @@ function handleAuthSubmit(event) {
     password,
     city: "Online",
     bio:
-      "New Pretext member building a public shelf and looking for recs beyond a single algorithm bubble.",
+      "New TVlist member building a public shelf and looking for recs beyond a single algorithm bubble.",
     vibe: "Fresh watchlist builder",
     friends: ["user-nova"].filter((userId) => getUserById(userId)),
     shelf: [],
@@ -1977,7 +1977,7 @@ async function handleLibrarySubmit(event) {
     ),
     note:
       elements.noteInput.value.trim() ||
-      `${catalogItem.title} added from your Pretext shelf composer.`,
+      `${catalogItem.title} added from your TVlist shelf composer.`,
   });
 
   persistStore();

@@ -1,6 +1,6 @@
-# Pretext Watchboard
+# TVlist
 
-Pretext Watchboard is a MAL-inspired social tracker for TV shows and movies. It
+TVlist is a MAL-inspired social tracker for TV shows and movies. It
 lets people maintain a public watch list, sign in with a demo account, inspect
 friends' shelves, add/remove friends, post in spoiler-safe community boards,
 and discover titles that break algorithm silos.
@@ -21,8 +21,8 @@ GitHub Pages workflow in
 - Live TV chart rail powered by the TVMaze API with direct IMDb title links
 - Custom title composer for adding new movies or shows that are not in the seed
   catalog
-- MAL-inspired blue/white UI with poster cards, explicit Watchlist actions, and
-  a cursor-through-text hover effect powered by `@chenglou/pretext`
+- Nord-inspired dark UI with poster cards, explicit Watchlist actions, and a
+  cursor-through-text hover effect powered by `@chenglou/pretext`
 
 ## Demo accounts
 
@@ -67,4 +67,4 @@ to Firebase Auth + Firestore, Supabase Auth + Postgres, or another hosted API.
 The original server-utilization Python agent code is still present under
 [`src/server_utilization_agent`](src/server_utilization_agent/) and untouched by
 the frontend rewrite. Only the GitHub Pages site in [`docs/`](docs/) and this
-README were repurposed for Pretext Watchboard.
+README were repurposed for TVlist.
