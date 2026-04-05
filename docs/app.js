@@ -33,7 +33,7 @@ const DEFAULT_POSTER_DATA_URI =
       <rect width="420" height="620" rx="24" fill="#e8ecf6"/>
       <rect x="22" y="22" width="376" height="576" rx="22" fill="#f8faff" stroke="#cdd6e6" stroke-width="4"/>
       <text x="210" y="295" text-anchor="middle" font-family="Arial, sans-serif" font-size="44" font-weight="700" fill="#2e51a2">No Poster</text>
-      <text x="210" y="348" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#5f6b7a">Add IMDb / TV title</text>
+      <text x="210" y="348" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#5f6b7a">Add a title to begin</text>
     </svg>
   `);
 
@@ -772,9 +772,9 @@ const elements = {
   kindInput: document.querySelector("#kind-input"),
   statusInput: document.querySelector("#status-input"),
   scoreInput: document.querySelector("#score-input"),
+  progressField: document.querySelector("#progress-field"),
   progressInput: document.querySelector("#progress-input"),
   genresInput: document.querySelector("#genres-input"),
-  imdbInput: document.querySelector("#imdb-input"),
   noteInput: document.querySelector("#note-input"),
   catalogSuggestions: document.querySelector("#catalog-suggestions"),
   libraryGrid: document.querySelector("#library-grid"),
@@ -805,6 +805,7 @@ function initApp() {
   syncRouteFromHash();
   syncCatalogSuggestions();
   syncAuthModeControls();
+  syncLibraryFormControls();
   bindEventListeners();
   renderApp();
   loadPretextRuntime().catch(() => {
@@ -876,6 +877,7 @@ function bindEventListeners() {
   });
 
   elements.libraryForm.addEventListener("submit", handleLibrarySubmit);
+  elements.statusInput.addEventListener("change", syncLibraryFormControls);
 
   elements.libraryGrid.addEventListener("change", (event) => {
     const statusSelect = event.target.closest("[data-status-select]");
@@ -1230,6 +1232,14 @@ function renderLibrary() {
         return "";
       }
       const tone = statusToneClass[entry.status] || "";
+      const metaParts = [
+        `Your score ${formatScore(entry.score)}`,
+        `IMDb ${formatScore(item.imdbScore)}`,
+      ];
+      const progressLabel = displayProgressLabel(entry);
+      if (progressLabel) {
+        metaParts.push(progressLabel);
+      }
       return `
         <article class="title-card">
           <div class="title-top">
@@ -1239,11 +1249,7 @@ function renderLibrary() {
                 String(item.year ?? "")
               )}</p>
               <h3 class="flow-copy">${escapeHtml(item.title)}</h3>
-              <p class="meta-line">Your score ${formatScore(
-                entry.score
-              )} · IMDb ${formatScore(item.imdbScore)} · ${escapeHtml(
-                entry.progress || "No progress note"
-              )}</p>
+              <p class="meta-line">${renderMetaParts(metaParts)}</p>
             </div>
           </div>
           <div class="chip-row">
@@ -1934,7 +1940,6 @@ async function handleLibrarySubmit(event) {
 
   const existingItem = findCatalogItemByTitle(title);
   const genres = parseGenres(elements.genresInput.value);
-  const imdbId = normalizeImdbId(elements.imdbInput.value);
   const resolvedPoster =
     existingItem?.poster ||
     POSTER_URL_BY_ID[existingItem?.id || ""] ||
@@ -1944,7 +1949,6 @@ async function handleLibrarySubmit(event) {
     ? upsertCatalogItem({
         ...existingItem,
         genres: genres.length > 0 ? mergeUnique(existingItem.genres, genres) : existingItem.genres,
-        imdbId: imdbId || existingItem.imdbId,
         poster: existingItem.poster || resolvedPoster,
       })
     : upsertCatalogItem({
@@ -1953,7 +1957,6 @@ async function handleLibrarySubmit(event) {
         kind: elements.kindInput.value,
         year: new Date().getFullYear(),
         genres: genres.length > 0 ? genres : [elements.kindInput.value],
-        imdbId,
         imdbScore: Number(elements.scoreInput.value) || null,
         chartScore: 82,
         runtime:
@@ -1968,9 +1971,10 @@ async function handleLibrarySubmit(event) {
   upsertShelfEntry(activeUser, catalogItem.id, {
     status: elements.statusInput.value,
     score: Number(elements.scoreInput.value) || 0,
-    progress:
-      elements.progressInput.value.trim() ||
-      defaultProgressLabel(elements.statusInput.value),
+    progress: resolveShelfProgress(
+      elements.statusInput.value,
+      elements.progressInput.value
+    ),
     note:
       elements.noteInput.value.trim() ||
       `${catalogItem.title} added from your Pretext shelf composer.`,
@@ -1982,6 +1986,7 @@ async function handleLibrarySubmit(event) {
   elements.kindInput.value = catalogItem.kind;
   elements.statusInput.value = "Watching";
   elements.scoreInput.value = "8.5";
+  syncLibraryFormControls();
   elements.titleInput.focus();
   renderApp();
   showToast(`${catalogItem.title} is now on ${activeUser.name}'s public list.`);
@@ -2072,7 +2077,7 @@ function updateShelfStatus(titleId, status) {
   }
 
   entry.status = status;
-  entry.progress = entry.progress || defaultProgressLabel(status);
+  entry.progress = resolveShelfProgress(status, entry.progress);
   entry.updatedAt = new Date().toISOString();
   persistStore();
   renderApp();
@@ -2110,7 +2115,7 @@ function saveTitleToShelf(titleId, status) {
   upsertShelfEntry(activeUser, item.id, {
     status,
     score: Number(item.imdbScore ?? 8),
-    progress: defaultProgressLabel(status),
+    progress: resolveShelfProgress(status),
     note: `Added from recommendations, charts, or a friend's public list.`,
   });
   persistStore();
@@ -2330,7 +2335,7 @@ function upsertShelfEntry(user, titleId, payload) {
   if (existingEntry) {
     existingEntry.status = payload.status;
     existingEntry.score = payload.score;
-    existingEntry.progress = payload.progress;
+    existingEntry.progress = resolveShelfProgress(payload.status, payload.progress);
     existingEntry.note = payload.note;
     existingEntry.updatedAt = new Date().toISOString();
     return existingEntry;
@@ -2340,7 +2345,7 @@ function upsertShelfEntry(user, titleId, payload) {
     titleId,
     status: payload.status,
     score: payload.score,
-    progress: payload.progress,
+    progress: resolveShelfProgress(payload.status, payload.progress),
     note: payload.note,
     updatedAt: new Date().toISOString(),
   };
@@ -2495,7 +2500,15 @@ function normalizeStorePayload(store) {
         POSTER_URL_BY_ID[normalizeTitleToId(item.title)] ||
         DEFAULT_POSTER_DATA_URI,
     })),
-    users: store.users,
+    users: store.users.map((user) => ({
+      ...user,
+      shelf: Array.isArray(user.shelf)
+        ? user.shelf.map((entry) => ({
+            ...entry,
+            progress: resolveShelfProgress(entry.status, entry.progress),
+          }))
+        : [],
+    })),
     boards: store.boards,
   };
 }
@@ -2572,10 +2585,48 @@ function defaultProgressLabel(status) {
   return {
     Watching: "In progress",
     Planning: "Watchlist queue",
-    Completed: "Finished",
+    Completed: "",
     Paused: "On pause",
     Dropped: "Dropped",
   }[status] || "Tracked";
+}
+
+function isCompletedStatus(status) {
+  return status === "Completed";
+}
+
+function resolveShelfProgress(status, rawValue = "") {
+  if (isCompletedStatus(status)) {
+    return "";
+  }
+
+  const value = String(rawValue || "").trim();
+  return value || defaultProgressLabel(status);
+}
+
+function displayProgressLabel(entry) {
+  if (!entry || isCompletedStatus(entry.status)) {
+    return "";
+  }
+
+  return String(entry.progress || "").trim();
+}
+
+function renderMetaParts(parts) {
+  return parts.filter(Boolean).map((part) => escapeHtml(part)).join(" · ");
+}
+
+function syncLibraryFormControls() {
+  if (!elements.progressField || !elements.progressInput) {
+    return;
+  }
+
+  const shouldHideProgress = isCompletedStatus(elements.statusInput.value);
+  elements.progressField.classList.toggle("is-hidden", shouldHideProgress);
+
+  if (shouldHideProgress) {
+    elements.progressInput.value = "";
+  }
 }
 
 function displayShelfStatus(status) {

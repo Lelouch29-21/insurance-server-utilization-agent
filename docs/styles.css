@@ -887,7 +887,7 @@ img {
 }
 
 .library-form {
-  grid-template-columns: minmax(220px, 2fr) 120px 160px 120px 150px minmax(160px, 1fr) 150px minmax(200px, 2fr) 180px;
+  grid-template-columns: minmax(220px, 2fr) 120px 160px 120px 150px minmax(180px, 1fr) minmax(220px, 2fr) 180px;
   align-items: end;
 }
 
