@@ -21,7 +21,7 @@ GitHub Pages workflow in
 - Live TV chart rail powered by the TVMaze API with direct IMDb title links
 - Custom title composer for adding new movies or shows that are not in the seed
   catalog
-- Nord-inspired dark UI with poster cards, explicit Watchlist actions, and a
+- One Dark-inspired UI with poster cards, explicit Watchlist actions, and a
   cursor-through-text hover effect powered by `@chenglou/pretext`
 
 ## Demo accounts

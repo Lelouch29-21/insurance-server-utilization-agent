@@ -30,10 +30,10 @@ const DEFAULT_POSTER_DATA_URI =
   "data:image/svg+xml;charset=UTF-8," +
   encodeURIComponent(`
     <svg xmlns="http://www.w3.org/2000/svg" width="420" height="620" viewBox="0 0 420 620">
-      <rect width="420" height="620" rx="24" fill="#1A1B26"/>
-      <rect x="22" y="22" width="376" height="576" rx="22" fill="#24283B" stroke="#3B4261" stroke-width="4"/>
-      <text x="210" y="295" text-anchor="middle" font-family="Arial, sans-serif" font-size="44" font-weight="700" fill="#7AA2F7">No Poster</text>
-      <text x="210" y="348" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#C0CAF5">Add a title to begin</text>
+      <rect width="420" height="620" rx="24" fill="#1E2127"/>
+      <rect x="22" y="22" width="376" height="576" rx="22" fill="#282C34" stroke="#353B45" stroke-width="4"/>
+      <text x="210" y="295" text-anchor="middle" font-family="Arial, sans-serif" font-size="44" font-weight="700" fill="#61AFEF">No Poster</text>
+      <text x="210" y="348" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#ABB2BF">Add a title to begin</text>
     </svg>
   `);
 
