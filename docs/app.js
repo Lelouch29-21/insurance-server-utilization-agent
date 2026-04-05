@@ -735,7 +735,12 @@ const pretextRuntime = {
   scheduledFrame: 0,
 };
 
+const composerRuntime = {
+  metadataRequestId: 0,
+};
+
 const pretextLayoutStore = new WeakMap();
+const titleMetadataCache = new Map();
 
 const elements = {
   sessionAction: document.querySelector("#session-action"),
@@ -877,7 +882,18 @@ function bindEventListeners() {
   });
 
   elements.libraryForm.addEventListener("submit", handleLibrarySubmit);
+  elements.titleInput.addEventListener("input", syncComposerMetadataFromCatalog);
+  elements.titleInput.addEventListener("change", () => {
+    autofillComposerTitleMetadata({ overwriteGenres: true }).catch(() => {
+      // Composer genre autofill is best-effort only.
+    });
+  });
   elements.statusInput.addEventListener("change", syncLibraryFormControls);
+  elements.kindInput.addEventListener("change", () => {
+    autofillComposerTitleMetadata().catch(() => {
+      // Composer genre autofill is best-effort only.
+    });
+  });
 
   elements.libraryGrid.addEventListener("change", (event) => {
     const statusSelect = event.target.closest("[data-status-select]");
@@ -1938,29 +1954,43 @@ async function handleLibrarySubmit(event) {
     return;
   }
 
+  const requestedKind = elements.kindInput.value;
   const existingItem = findCatalogItemByTitle(title);
-  const genres = parseGenres(elements.genresInput.value);
+  const metadata = await resolveTitleMetadata(
+    title,
+    existingItem?.kind || requestedKind
+  );
+  let genres = parseGenres(elements.genresInput.value);
+  if (genres.length === 0 && metadata.genres.length > 0) {
+    genres = metadata.genres;
+    elements.genresInput.value = metadata.genres.join(", ");
+  }
   const resolvedPoster =
     existingItem?.poster ||
     POSTER_URL_BY_ID[existingItem?.id || ""] ||
-    (await resolvePosterForTitle(title, elements.kindInput.value));
+    metadata.poster ||
+    DEFAULT_POSTER_DATA_URI;
+  const resolvedKind = metadata.kind || existingItem?.kind || requestedKind;
 
   const catalogItem = existingItem
     ? upsertCatalogItem({
         ...existingItem,
-        genres: genres.length > 0 ? mergeUnique(existingItem.genres, genres) : existingItem.genres,
+        genres:
+          genres.length > 0
+            ? mergeUnique(existingItem.genres, genres)
+            : existingItem.genres,
         poster: existingItem.poster || resolvedPoster,
       })
     : upsertCatalogItem({
         id: generateTitleId(title),
         title,
-        kind: elements.kindInput.value,
+        kind: resolvedKind,
         year: new Date().getFullYear(),
-        genres: genres.length > 0 ? genres : [elements.kindInput.value],
+        genres: genres.length > 0 ? genres : [resolvedKind],
         imdbScore: Number(elements.scoreInput.value) || null,
         chartScore: 82,
         runtime:
-          elements.kindInput.value === "TV Show" ? "New series" : "Feature",
+          resolvedKind === "TV Show" ? "New series" : "Feature",
         source: "Community added",
         poster: resolvedPoster,
         summary:
@@ -2453,6 +2483,59 @@ function syncCatalogSuggestions() {
     .join("");
 }
 
+function syncComposerMetadataFromCatalog() {
+  const catalogItem = findCatalogItemByTitle(elements.titleInput.value.trim());
+  if (!catalogItem) {
+    return;
+  }
+
+  applyComposerTitleMetadata(buildTitleMetadataFromItem(catalogItem), {
+    overwriteGenres: true,
+  });
+}
+
+async function autofillComposerTitleMetadata({ overwriteGenres = false } = {}) {
+  const title = elements.titleInput.value.trim();
+  const kind = elements.kindInput.value;
+  if (!title) {
+    return null;
+  }
+
+  const requestId = ++composerRuntime.metadataRequestId;
+  const metadata = await resolveTitleMetadata(title, kind);
+  if (
+    requestId !== composerRuntime.metadataRequestId ||
+    normalizeTitle(elements.titleInput.value) !== normalizeTitle(title) ||
+    elements.kindInput.value !== kind
+  ) {
+    return null;
+  }
+
+  applyComposerTitleMetadata(metadata, { overwriteGenres });
+  return metadata;
+}
+
+function applyComposerTitleMetadata(
+  metadata,
+  { overwriteGenres = false } = {}
+) {
+  if (!metadata) {
+    return;
+  }
+
+  if (metadata.kind) {
+    elements.kindInput.value = metadata.kind;
+  }
+
+  if (
+    Array.isArray(metadata.genres) &&
+    metadata.genres.length > 0 &&
+    (overwriteGenres || !elements.genresInput.value.trim())
+  ) {
+    elements.genresInput.value = metadata.genres.join(", ");
+  }
+}
+
 function persistStore() {
   try {
     window.localStorage.setItem(STORE_KEY, JSON.stringify(appState.store));
@@ -2570,6 +2653,20 @@ function mergeUnique(leftList, rightList) {
   return [...new Set([...(leftList || []), ...(rightList || [])])].filter(Boolean);
 }
 
+function sanitizeGenres(genres) {
+  return [...new Set([...(genres || [])].map(normalizeGenreLabel).filter(Boolean))].slice(0, 4);
+}
+
+function normalizeGenreLabel(label) {
+  return String(label || "")
+    .replace(/\bfilm\b/gi, "")
+    .replace(/\btelevision series\b/gi, "")
+    .replace(/\btelevision program\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 function generateId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random()
     .toString(36)
@@ -2653,50 +2750,204 @@ function posterUrlForItem(item) {
   );
 }
 
-async function resolvePosterForTitle(title, kind) {
-  try {
-    if (kind === "TV Show") {
-      const response = await fetch(
-        `https://api.tvmaze.com/singlesearch/shows?q=${encodeURIComponent(title)}`
-      );
-      if (!response.ok) {
-        return DEFAULT_POSTER_DATA_URI;
-      }
-      const show = await response.json();
-      return show?.image?.original || show?.image?.medium || DEFAULT_POSTER_DATA_URI;
-    }
+function buildTitleMetadataFromItem(item) {
+  return {
+    kind: item?.kind || "",
+    genres: sanitizeGenres(item?.genres || []),
+    poster: posterUrlForItem(item),
+  };
+}
 
-    const searchResponse = await fetch(
-      `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(
-        `${title} film`
-      )}&format=json&origin=*`
-    );
-    if (!searchResponse.ok) {
-      return DEFAULT_POSTER_DATA_URI;
-    }
-    const searchPayload = await searchResponse.json();
-    const pageTitle = searchPayload?.query?.search?.[0]?.title;
-    if (!pageTitle) {
-      return DEFAULT_POSTER_DATA_URI;
-    }
-
-    const summaryResponse = await fetch(
-      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(
-        pageTitle.replace(/\s+/g, "_")
-      )}`
-    );
-    if (!summaryResponse.ok) {
-      return DEFAULT_POSTER_DATA_URI;
-    }
-    const summaryPayload = await summaryResponse.json();
-    return (
-      summaryPayload?.originalimage?.source ||
-      summaryPayload?.thumbnail?.source ||
-      DEFAULT_POSTER_DATA_URI
-    );
-  } catch {
-    return DEFAULT_POSTER_DATA_URI;
+async function resolveTitleMetadata(title, kind) {
+  const existingItem = findCatalogItemByTitle(title);
+  if (existingItem) {
+    return buildTitleMetadataFromItem(existingItem);
   }
+
+  const cacheKey = `${kind}::${normalizeTitle(title)}`;
+  if (titleMetadataCache.has(cacheKey)) {
+    return deepClone(titleMetadataCache.get(cacheKey));
+  }
+
+  const metadata =
+    kind === "TV Show"
+      ? await resolveTvTitleMetadata(title)
+      : await resolveMovieTitleMetadata(title);
+
+  titleMetadataCache.set(cacheKey, metadata);
+  return deepClone(metadata);
+}
+
+async function resolveTvTitleMetadata(title) {
+  try {
+    const response = await fetch(
+      `https://api.tvmaze.com/singlesearch/shows?q=${encodeURIComponent(title)}`
+    );
+    if (!response.ok) {
+      return createEmptyTitleMetadata("TV Show");
+    }
+    const show = await response.json();
+    return {
+      kind: "TV Show",
+      genres: sanitizeGenres(show?.genres || []),
+      poster:
+        show?.image?.original ||
+        show?.image?.medium ||
+        DEFAULT_POSTER_DATA_URI,
+    };
+  } catch {
+    return createEmptyTitleMetadata("TV Show");
+  }
+}
+
+async function resolveMovieTitleMetadata(title) {
+  try {
+    const pageTitle = await searchWikipediaPageTitle(`${title} film`);
+    if (!pageTitle) {
+      return createEmptyTitleMetadata("Movie");
+    }
+
+    const [summaryPayload, wikidataId] = await Promise.all([
+      fetchWikipediaSummary(pageTitle),
+      fetchWikipediaWikidataId(pageTitle),
+    ]);
+
+    let genres = wikidataId ? await fetchWikidataGenres(wikidataId) : [];
+    if (genres.length === 0) {
+      genres = inferGenresFromDescription(
+        summaryPayload?.description || summaryPayload?.extract || ""
+      );
+    }
+
+    return {
+      kind: "Movie",
+      genres: sanitizeGenres(genres),
+      poster:
+        summaryPayload?.originalimage?.source ||
+        summaryPayload?.thumbnail?.source ||
+        DEFAULT_POSTER_DATA_URI,
+    };
+  } catch {
+    return createEmptyTitleMetadata("Movie");
+  }
+}
+
+function createEmptyTitleMetadata(kind) {
+  return {
+    kind,
+    genres: [],
+    poster: DEFAULT_POSTER_DATA_URI,
+  };
+}
+
+async function searchWikipediaPageTitle(query) {
+  const response = await fetch(
+    `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(
+      query
+    )}&format=json&origin=*`
+  );
+  if (!response.ok) {
+    return "";
+  }
+
+  const payload = await response.json();
+  return payload?.query?.search?.[0]?.title || "";
+}
+
+async function fetchWikipediaSummary(pageTitle) {
+  const response = await fetch(
+    `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(
+      pageTitle.replace(/\s+/g, "_")
+    )}`
+  );
+  if (!response.ok) {
+    return null;
+  }
+
+  return response.json();
+}
+
+async function fetchWikipediaWikidataId(pageTitle) {
+  const response = await fetch(
+    `https://en.wikipedia.org/w/api.php?action=query&prop=pageprops&titles=${encodeURIComponent(
+      pageTitle
+    )}&ppprop=wikibase_item&format=json&origin=*`
+  );
+  if (!response.ok) {
+    return "";
+  }
+
+  const payload = await response.json();
+  const page = Object.values(payload?.query?.pages || {})[0];
+  return page?.pageprops?.wikibase_item || "";
+}
+
+async function fetchWikidataGenres(entityId) {
+  const entityResponse = await fetch(
+    `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${encodeURIComponent(
+      entityId
+    )}&props=claims&format=json&origin=*`
+  );
+  if (!entityResponse.ok) {
+    return [];
+  }
+
+  const entityPayload = await entityResponse.json();
+  const claims = entityPayload?.entities?.[entityId]?.claims?.P136 || [];
+  const genreIds = claims
+    .map((claim) => claim?.mainsnak?.datavalue?.value?.id)
+    .filter(Boolean);
+
+  if (genreIds.length === 0) {
+    return [];
+  }
+
+  const labelsResponse = await fetch(
+    `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${encodeURIComponent(
+      genreIds.join("|")
+    )}&props=labels&languages=en&format=json&origin=*`
+  );
+  if (!labelsResponse.ok) {
+    return [];
+  }
+
+  const labelsPayload = await labelsResponse.json();
+  return Object.values(labelsPayload?.entities || {})
+    .map((entity) => entity?.labels?.en?.value)
+    .filter(Boolean);
+}
+
+function inferGenresFromDescription(description) {
+  const source = String(description || "").toLowerCase();
+  const matches = [
+    ["science fiction", "Sci-Fi"],
+    ["sci-fi", "Sci-Fi"],
+    ["thriller", "Thriller"],
+    ["drama", "Drama"],
+    ["comedy", "Comedy"],
+    ["action", "Action"],
+    ["romance", "Romance"],
+    ["horror", "Horror"],
+    ["fantasy", "Fantasy"],
+    ["animation", "Animation"],
+    ["documentary", "Documentary"],
+    ["crime", "Crime"],
+    ["mystery", "Mystery"],
+    ["adventure", "Adventure"],
+    ["historical", "Historical"],
+    ["biographical", "Biopic"],
+    ["biopic", "Biopic"],
+    ["family", "Family"],
+  ]
+    .filter(([needle]) => source.includes(needle))
+    .map(([, label]) => label);
+
+  return sanitizeGenres(matches);
+}
+
+async function resolvePosterForTitle(title, kind) {
+  const metadata = await resolveTitleMetadata(title, kind);
+  return metadata.poster || DEFAULT_POSTER_DATA_URI;
 }
 
 function formatScore(score) {
