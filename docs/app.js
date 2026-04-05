@@ -30,10 +30,10 @@ const DEFAULT_POSTER_DATA_URI =
   "data:image/svg+xml;charset=UTF-8," +
   encodeURIComponent(`
     <svg xmlns="http://www.w3.org/2000/svg" width="420" height="620" viewBox="0 0 420 620">
-      <rect width="420" height="620" rx="24" fill="#e8ecf6"/>
-      <rect x="22" y="22" width="376" height="576" rx="22" fill="#f8faff" stroke="#cdd6e6" stroke-width="4"/>
-      <text x="210" y="295" text-anchor="middle" font-family="Arial, sans-serif" font-size="44" font-weight="700" fill="#2e51a2">No Poster</text>
-      <text x="210" y="348" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#5f6b7a">Add a title to begin</text>
+      <rect width="420" height="620" rx="24" fill="#2E3440"/>
+      <rect x="22" y="22" width="376" height="576" rx="22" fill="#3B4252" stroke="#4C566A" stroke-width="4"/>
+      <text x="210" y="295" text-anchor="middle" font-family="Arial, sans-serif" font-size="44" font-weight="700" fill="#88C0D0">No Poster</text>
+      <text x="210" y="348" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#D8DEE9">Add a title to begin</text>
     </svg>
   `);
 
@@ -2622,7 +2622,9 @@ function syncLibraryFormControls() {
   }
 
   const shouldHideProgress = isCompletedStatus(elements.statusInput.value);
+  elements.progressField.hidden = shouldHideProgress;
   elements.progressField.classList.toggle("is-hidden", shouldHideProgress);
+  elements.progressInput.disabled = shouldHideProgress;
 
   if (shouldHideProgress) {
     elements.progressInput.value = "";
